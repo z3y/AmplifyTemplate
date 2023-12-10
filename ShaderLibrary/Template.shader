@@ -1,7 +1,9 @@
+/*applydfg*/
 Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 {
     Properties
     {
+        [HideInInspector] [NonModifiableTextureData] [NoScaleOffset] _DFG ("DFG", 2D) = "" {}
         /*ase_props*/
     }
     SubShader
@@ -110,7 +112,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 /*ase_local_var:wvd*/float3 viewDirectionWS = normalize(UnityWorldSpaceViewDir(positionWS));
 
                 /*ase_frag_code:varyings=Varyings*/
-                half3 albedo = /*ase_frag_out:Albedo;Float3*/0.0/*end*/;
+                half3 albedo = /*ase_frag_out:Albedo;Float3*/1.0/*end*/;
                 half alpha = /*ase_frag_out:Alpha;Float*/1.0/*end*/;
                 float3 normalTS = /*ase_frag_out:Normal;Float3*/float3(0, 0, 1)/*end*/;
                 half roughness = /*ase_frag_out:Roughness;Float*/0.5/*end*/;
