@@ -18,6 +18,7 @@ Shader /*ase_name*/ "Hidden/Built-In (z3y)/Lit" /*end*/
             /*ase_pragma*/
 
             #include "UnityCG.cginc"
+            #include "Packages/com.z3y.shadersamplify/ShaderLibrary/Functions.hlsl"
 
             struct Attributes
             {
@@ -81,12 +82,33 @@ Shader /*ase_name*/ "Hidden/Built-In (z3y)/Lit" /*end*/
                 return varyings;
             }
 
+            // #define _NORMALMAP
+
             half4 frag (Varyings varyings/*ase_frag_input*/) : SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(varyings);
                 /*ase_local_var*/float2 lightmapUV = 0;
                 #if defined(LIGHTMAP_ON)
                     lightmapUV = varyings.lightmapUV;
+                #endif
+                
+                // float renormFactor = 1.0 / length(varyings.normalWS.xyz);
+                float oddNegativeScale = unity_WorldTransformParams.w;
+                float crossSign = (varyings.tangentWS.w > 0.0 ? 1.0 : -1.0) * oddNegativeScale;
+                float3 bitangentWS = crossSign * cross(varyings.normalWS.xyz, varyings.tangentWS.xyz);
+                float3 tangentWS;
+                float3 normalWS;
+                /*ase_local_var:wbt*/float3 bitangentWSVertex = bitangentWS;
+
+                #if defined(_NORMALMAP)
+                    // float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
+                    // normalWS = TransformTangentToWorld(surfaceDescription.Normal, tangentToWorld);
+
+                    normalWS = Unity_SafeNormalize(varyings.normalWS);
+                #else
+                    normalWS = normalize(varyings.normalWS);
+                    tangentWS = varyings.tangentWS.xyz;
+                    bitangentWS = bitangentWS;
                 #endif
 
                 /*ase_frag_code:varyings=Varyings*/
