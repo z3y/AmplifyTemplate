@@ -1,4 +1,4 @@
-Shader /*ase_name*/ "Hidden/Built-In (z3y)/Lit" /*end*/
+Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 {
     Properties
     {
@@ -11,13 +11,20 @@ Shader /*ase_name*/ "Hidden/Built-In (z3y)/Lit" /*end*/
 		/*ase_pass*/
         Pass
         {
-            CGPROGRAM
+            Name "Forward"
+            Tags { "LightMode" = "ForwardBase" }
+
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            #pragma multi_compile_fwdbase
             #pragma multi_compile_fog
+            #pragma multi_compile_instancing
             /*ase_pragma*/
 
             #include "UnityCG.cginc"
+            #include "Lighting.cginc"
+            #include "AutoLight.cginc"
             #include "Packages/com.z3y.shadersamplify/ShaderLibrary/Functions.hlsl"
 
             struct Attributes
@@ -78,11 +85,9 @@ Shader /*ase_name*/ "Hidden/Built-In (z3y)/Lit" /*end*/
                     varyings.lightmapUV.zw = mad(attributes.uv2.xy, unity_DynamicLightmapST.xy, unity_DynamicLightmapST.zw);
                 #endif
 
-                UNITY_TRANSFER_FOG(varyings, varyings.vertex);
+                UNITY_TRANSFER_FOG(varyings, varyings.positionCS);
                 return varyings;
             }
-
-            // #define _NORMALMAP
 
             half4 frag (Varyings varyings/*ase_frag_input*/) : SV_Target
             {
@@ -98,26 +103,52 @@ Shader /*ase_name*/ "Hidden/Built-In (z3y)/Lit" /*end*/
                 float3 bitangentWS = crossSign * cross(varyings.normalWS.xyz, varyings.tangentWS.xyz);
                 float3 tangentWS;
                 float3 normalWS;
-                /*ase_local_var:wbt*/float3 bitangentWSVertex = bitangentWS;
-
-                #if defined(_NORMALMAP)
-                    // float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
-                    // normalWS = TransformTangentToWorld(surfaceDescription.Normal, tangentToWorld);
-
-                    normalWS = Unity_SafeNormalize(varyings.normalWS);
-                #else
-                    normalWS = normalize(varyings.normalWS);
-                    tangentWS = varyings.tangentWS.xyz;
-                    bitangentWS = bitangentWS;
-                #endif
+                /*ase_local_var:wn*/float3 geometricNormalWS = normalize(varyings.normalWS);
+                /*ase_local_var:wt*/float3 geometricTangentWS = normalize(varyings.tangentWS.xyz);
+                /*ase_local_var:wbt*/float3 geometricBitangentWS = normalize(bitangentWS);
+                /*ase_local_var:wp*/float3 positionWS = varyings.positionWS;
+                /*ase_local_var:wvd*/float3 viewDirectionWS = normalize(UnityWorldSpaceViewDir(positionWS));
 
                 /*ase_frag_code:varyings=Varyings*/
+                half3 albedo = /*ase_frag_out:Albedo;Float3*/0.0/*end*/;
+                half alpha = /*ase_frag_out:Alpha;Float*/1.0/*end*/;
+                float3 normalTS = /*ase_frag_out:Normal;Float3*/float3(0, 0, 1)/*end*/;
+                half roughness = /*ase_frag_out:Roughness;Float*/0.5/*end*/;
+                half metallic = /*ase_frag_out:Metallic;Float*/0.0/*end*/;
+                half reflectance = /*ase_frag_out:Reflectance;Float*/0.5/*end*/;
+                half3 emission = /*ase_frag_out:Emission;Float3*/0.0/*end*/;
+                half gsaaVariance = /*ase_frag_out:GSAA Variance;Float*/0.15/*end*/;
+                half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float*/0.1/*end*/;
 
-                half4 color = /*ase_frag_out:Albedo;Float4*/half4(1,1,1,1)/*end*/;
+                #if defined(_NORMALMAP)
+                    float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
+                    normalWS = mul(normalTS, tangentToWorld);
+                    normalWS = Unity_SafeNormalize(normalWS);
+                #else
+                    normalWS = geometricNormalWS;
+                #endif
+                tangentWS = geometricTangentWS;
+                bitangentWS = geometricBitangentWS;
+
+                half NoV = abs(dot(normalWS, viewDirectionWS)) + 1e-5f;
+                #if defined(_GEOMETRIC_SPECULAR_AA)
+                    roughness = Filament::GeometricSpecularAA(geometricNormalWS, roughness, gsaaVariance, gsaaThreshold);
+                #endif
+                half roughness2 = roughness * roughness;
+                half roughness2Clamped = max(roughness2, 0.002);
+                float3 reflectVector = reflect(-viewDirectionWS, normalWS);
+                #if !defined(QUALITY_LOW)
+                    reflectVector = lerp(reflectVector, normalWS, roughness2);
+                #endif
+                half3 f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + albedo * metallic;
+
+                half4 color = half4(albedo, alpha);
+
+                color.rgb += emission;
                 UNITY_APPLY_FOG(i.fogCoord, color);
                 return color;
             }
-            ENDCG
+            ENDHLSL
         }
     }
 }
