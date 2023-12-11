@@ -144,7 +144,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
                 half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
                 half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float;_GSAAT*/0.1/*end*/;
-                half specularAOIntensity = /*ase_frag_out:Specular Occlusion;Float;_SPAO*/0.0/*end*/;
+                half specularAOIntensity = /*ase_frag_out:Specular Occlusion;Float;_SPAO*/1.0/*end*/;
 
                 #if defined(_NORMALMAP)
                     float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
@@ -191,6 +191,11 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                             illuminance = illuminance * halfLambert / max(1e-4, directionalLightmap.w);
                         #endif
                     #endif
+                    #if defined(LIGHTMAP_SHADOW_MIXING) && !defined(SHADOWS_SHADOWMASK) && defined(SHADOWS_SCREEN)
+                        illuminance = SubtractMainLightWithRealtimeAttenuationFromLightmap(illuminance, light.attenuation, float4(0,0,0,0), normalWS);
+                        light = (Light)0;
+                    #endif
+
                     indirectDiffuse = illuminance;
 
                     #if defined(_BAKERY_MONOSH)
@@ -198,6 +203,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     #else
                         indirectOcclusion = illuminance;
                     #endif
+
                 #else
                     #if UNITY_SAMPLE_FULL_SH_PER_PIXEL
                         indirectDiffuse = ShadeSHPerPixel(normalWS, 0.0, positionWS);
@@ -244,7 +250,14 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 indirectSpecular *= energyCompensation * brdf;
                 directSpecular *= UNITY_PI;
 
-                half specularAO = lerp(1.0, saturate(sqrt(dot(indirectOcclusion + directDiffuse, 1.0))), specularAOIntensity) * Filament::ComputeSpecularAO(NoV, occlusion, roughness2);
+                half specularAO;
+                #if defined(QUALITY_LOW)
+                    specularAO = occlusion;
+                #else
+                    specularAO = Filament::ComputeSpecularAO(NoV, occlusion, roughness2);
+                #endif
+                directSpecular *= specularAO;
+                specularAO *= lerp(1.0, saturate(sqrt(dot(indirectOcclusion + directDiffuse, 1.0))), specularAOIntensity);
                 indirectSpecular *= specularAO;
 
                 half4 color = half4(albedo * (1.0 - metallic) * (indirectDiffuse * occlusion + directDiffuse), alpha);
@@ -260,11 +273,172 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
         Pass
         {
             /*ase_hide_pass*/
+            Name "FORWARD_DELTA"
+            Tags { "LightMode" = "ForwardAdd" }
+            Fog { Color (0,0,0,0) }
+            Blend One One
+            ZWrite Off
+            ZTest LEqual
+
+            HLSLPROGRAM
+            #pragma target 4.5 
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma multi_compile_fwdadd_fullshadows
+            #pragma multi_compile_fog
+            /*ase_pragma*/
+
+            #define pos positionCS
+            #define vertex positionOS
+            #define normal normalOS
+            #include "UnityCG.cginc"
+            #include "Lighting.cginc"
+            #include "AutoLight.cginc"
+
+            struct Attributes
+            {
+                float3 positionOS : POSITION;
+				float3 normalOS : NORMAL;
+                float4 tangentOS : TANGENT;
+                float4 uv0 : TEXCOORD0;
+                float4 uv1 : TEXCOORD1;
+                float4 uv2 : TEXCOORD2;
+                /*ase_vdata:p=p;n=n;t=t;uv0=tc0;uv1=tc1;uv2=tc2*/
+				UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                float3 positionWS : TEXCOORD0;
+                float3 normalWS : TEXCOORD1;
+                float4 tangentWS : TEXCOORD2;
+                UNITY_FOG_COORDS(3)
+                SHADOW_COORDS(4)
+                /*ase_interp(5,):sp=sp;wp=tc0;wn=tc1;wt=tc2*/
+				UNITY_VERTEX_INPUT_INSTANCE_ID
+				UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            #include "Packages/com.z3y.shadersamplify/ShaderLibrary/Functions.hlsl"
+
+            /*ase_globals*/
+            /*ase_funcs*/
+
+            Varyings vert (Attributes attributes/*ase_vert_input*/)
+            {
+                Varyings varyings;
+				UNITY_SETUP_INSTANCE_ID(attributes);
+				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+				UNITY_TRANSFER_INSTANCE_ID(attributes, varyings);
+
+                /*ase_vert_code:attributes=Attributes;varyings=Varyings*/
+
+                float4 positionCS = UnityObjectToClipPos(attributes.positionOS);
+                float3 positionWS = mul(unity_ObjectToWorld, float4(attributes.positionOS, 1.0)).xyz;
+                float3 normalWS = UnityObjectToWorldNormal(attributes.normalOS);
+                float4 tangentWS = float4(UnityObjectToWorldDir(attributes.tangentOS.xyz), attributes.tangentOS.w);
+
+                varyings.positionCS = positionCS;
+                varyings.positionWS = positionWS;
+                varyings.normalWS = normalWS;
+                varyings.tangentWS = tangentWS;
+
+                UNITY_TRANSFER_SHADOW(varyings, attributes.uv1.xy);
+                UNITY_TRANSFER_FOG(varyings, varyings.positionCS);
+                return varyings;
+            }
+
+            half4 frag (Varyings varyings/*ase_frag_input*/) : SV_Target
+            {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(varyings);
+                
+                // float renormFactor = 1.0 / length(varyings.normalWS.xyz);
+                float oddNegativeScale = unity_WorldTransformParams.w;
+                float crossSign = (varyings.tangentWS.w > 0.0 ? 1.0 : -1.0) * oddNegativeScale;
+                float3 bitangentWS = crossSign * cross(varyings.normalWS.xyz, varyings.tangentWS.xyz);
+                float3 tangentWS;
+                float3 normalWS;
+                /*ase_local_var:wn*/float3 geometricNormalWS = normalize(varyings.normalWS);
+                /*ase_local_var:wt*/float3 geometricTangentWS = normalize(varyings.tangentWS.xyz);
+                /*ase_local_var:wbt*/float3 geometricBitangentWS = normalize(bitangentWS);
+                /*ase_local_var:wp*/float3 positionWS = varyings.positionWS;
+                /*ase_local_var:wvd*/float3 viewDirectionWS = normalize(UnityWorldSpaceViewDir(positionWS));
+
+                Light light = Light::Initialize(varyings);
+                /*ase_local_var*/half3 lightColor = light.color;
+                /*ase_local_var*/half3 lightDirection = light.direction;
+                /*ase_local_var*/half lightAttenuation = light.attenuation;
+
+                /*ase_frag_code:varyings=Varyings*/
+                half3 albedo = /*ase_frag_out:Albedo;Float3;_Albedo*/1.0/*end*/;
+                half alpha = /*ase_frag_out:Alpha;Float;_Alpha*/1.0/*end*/;
+                half alphaClipThreshold = /*ase_frag_out:Alpha Clip Threshold;Float;_AlphaClip*/0.5/*end*/;
+                float3 normalTS = /*ase_frag_out:Normal;Float3;_NormalTS*/float3(0, 0, 1)/*end*/;
+                half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
+                half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
+                half occlusion = /*ase_frag_out:Occlusion;Float;_Occlusion*/1.0/*end*/;
+                half reflectance = /*ase_frag_out:Reflectance;Float;_Reflectance*/0.5/*end*/;
+                half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
+                half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
+                half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float;_GSAAT*/0.1/*end*/;
+                half specularAOIntensity = /*ase_frag_out:Specular Occlusion;Float;_SPAO*/1.0/*end*/;
+
+                #if defined(_NORMALMAP)
+                    float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
+                    normalWS = mul(normalTS, tangentToWorld);
+                    normalWS = Unity_SafeNormalize(normalWS);
+                #else
+                    normalWS = geometricNormalWS;
+                #endif
+                tangentWS = geometricTangentWS;
+                bitangentWS = geometricBitangentWS;
+
+                half NoV = abs(dot(normalWS, viewDirectionWS)) + 1e-5f;
+                #if defined(_GEOMETRIC_SPECULAR_AA)
+                    roughness = Filament::GeometricSpecularAA(geometricNormalWS, roughness, gsaaVariance, gsaaThreshold);
+                #endif
+                half roughness2 = roughness * roughness;
+                half3 f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + albedo * metallic;
+                half3 brdf;
+                half3 energyCompensation;
+                Filament::EnvironmentBRDF(NoV, roughness, f0, brdf, energyCompensation);
+
+                half3 directDiffuse = 0;
+                half3 directSpecular = 0;
+
+                // main light
+                ShadeLight(light, viewDirectionWS, normalWS, roughness, NoV, f0, energyCompensation, directDiffuse, directSpecular);
+                directSpecular *= UNITY_PI;
+
+                half specularAO;
+                #if defined(QUALITY_LOW)
+                    specularAO = occlusion;
+                #else
+                    specularAO = Filament::ComputeSpecularAO(NoV, occlusion, roughness2);
+                #endif
+                directSpecular *= specularAO;
+
+                half4 color = half4(albedo * (1.0 - metallic) * directDiffuse, alpha);
+                color.rgb += directSpecular;
+                color.rgb += emission;
+
+                UNITY_APPLY_FOG(i.fogCoord, color);
+                return color;
+            }
+            ENDHLSL
+        }
+        /*ase_pass*/
+        Pass
+        {
+            /*ase_hide_pass*/
             Name "SHADOWCASTER"
             Tags { "LightMode"="ShadowCaster" }
+			AlphaToMask Off
             ZWrite On
             Cull Off
             ZTest LEqual
+
 
             HLSLPROGRAM
             #pragma target 4.5
