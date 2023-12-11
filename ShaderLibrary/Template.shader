@@ -13,6 +13,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 		/*ase_pass*/
         Pass
         {
+            /*ase_main_pass*/
             Name "Forward"
             Tags { "LightMode" = "ForwardBase" }
 
@@ -127,17 +128,16 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 
                 Light light = Light::Initialize(varyings);
 
-
                 /*ase_frag_code:varyings=Varyings*/
-                half3 albedo = /*ase_frag_out:Albedo;Float3*/1.0/*end*/;
-                half alpha = /*ase_frag_out:Alpha;Float*/1.0/*end*/;
-                float3 normalTS = /*ase_frag_out:Normal;Float3*/float3(0, 0, 1)/*end*/;
-                half roughness = /*ase_frag_out:Roughness;Float*/0.5/*end*/;
-                half metallic = /*ase_frag_out:Metallic;Float*/0.0/*end*/;
-                half reflectance = /*ase_frag_out:Reflectance;Float*/0.5/*end*/;
-                half3 emission = /*ase_frag_out:Emission;Float3*/0.0/*end*/;
-                half gsaaVariance = /*ase_frag_out:GSAA Variance;Float*/0.15/*end*/;
-                half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float*/0.1/*end*/;
+                half3 albedo = /*ase_frag_out:Albedo;Float3;_Albedo*/1.0/*end*/;
+                half alpha = /*ase_frag_out:Alpha;Float;_Alpha*/1.0/*end*/;
+                float3 normalTS = /*ase_frag_out:Normal;Float3;_NormalTS*/float3(0, 0, 1)/*end*/;
+                half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
+                half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
+                half reflectance = /*ase_frag_out:Reflectance;Float;_Reflectance*/0.5/*end*/;
+                half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
+                half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
+                half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float;_GSAAT*/0.1/*end*/;
 
                 #if defined(_NORMALMAP)
                     float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
@@ -197,7 +197,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
         /*ase_pass*/
         Pass
         {
-            /*ase_hide_pass*/
             Name "SHADOWCASTER"
             Tags { "LightMode"="ShadowCaster" }
             ZWrite On
@@ -256,7 +255,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(varyings);
                 /*ase_frag_code:varyings=Varyings*/
-                half alpha = /*ase_frag_out:Alpha;Float*/1.0/*end*/;
+                half alpha = /*ase_frag_out:Alpha;Float;_Alpha*/1.0/*end*/;
             }
             ENDHLSL
         }
