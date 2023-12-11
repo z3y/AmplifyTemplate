@@ -29,6 +29,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 
             #define pos positionCS
             #define vertex positionOS
+            #define normal normalOS
             #include "UnityCG.cginc"
             #include "Lighting.cginc"
             #include "AutoLight.cginc"
@@ -131,6 +132,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 /*ase_frag_code:varyings=Varyings*/
                 half3 albedo = /*ase_frag_out:Albedo;Float3;_Albedo*/1.0/*end*/;
                 half alpha = /*ase_frag_out:Alpha;Float;_Alpha*/1.0/*end*/;
+                half alphaClipThreshold = /*ase_frag_out:Alpha Clip Threshold;Float;_AlphaClip*/0.5/*end*/;
                 float3 normalTS = /*ase_frag_out:Normal;Float3;_NormalTS*/float3(0, 0, 1)/*end*/;
                 half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
                 half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
@@ -179,13 +181,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 
                 half NoL = saturate(dot(normalWS, light.direction));
 
-                UNITY_LIGHT_ATTENUATION(atteattnuation, varyings, varyings.positionWS.xyz);
-
-                return atteattnuation;
-
-
-
-                half4 color = half4(albedo * indirectDiffuse, alpha);
+                half4 color = half4(albedo * indirectDiffuse + NoL, alpha);
 
                 color.rgb += emission;
                 UNITY_APPLY_FOG(i.fogCoord, color);
@@ -197,6 +193,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
         /*ase_pass*/
         Pass
         {
+            /*ase_hide_pass*/
             Name "SHADOWCASTER"
             Tags { "LightMode"="ShadowCaster" }
             ZWrite On
@@ -256,6 +253,131 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(varyings);
                 /*ase_frag_code:varyings=Varyings*/
                 half alpha = /*ase_frag_out:Alpha;Float;_Alpha*/1.0/*end*/;
+                half alphaClipThreshold = /*ase_frag_out:Alpha Clip Threshold;Float;_AlphaClip*/0.5/*end*/;
+                #ifdef _ALPHATEST_ON
+					clip(alpha - alphaClipThreshold);
+				#endif
+            }
+            ENDHLSL
+        }
+        /*ase_pass*/
+        Pass
+        {
+            /*ase_hide_pass*/
+            Name "META"
+            Tags { "LightMode"="Meta" }
+            Cull Off
+
+            HLSLPROGRAM
+            #pragma target 4.5
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma shader_feature EDITOR_VISUALIZATION
+            /*ase_pragma*/
+
+            #define pos positionCS
+            #define vertex positionOS
+            #define normal normalOS
+            #include "UnityCG.cginc"
+            #include "Lighting.cginc"
+            #include "AutoLight.cginc"
+            #include "UnityMetaPass.cginc"
+
+            struct Attributes
+            {
+                float3 positionOS : POSITION;
+				float3 normalOS : NORMAL;
+                float4 tangentOS : TANGENT;
+                float4 uv0 : TEXCOORD0;
+                float4 uv1 : TEXCOORD1;
+                float4 uv2 : TEXCOORD2;
+                /*ase_vdata:p=p;n=n;t=t;uv0=tc0;uv1=tc1;uv2=tc2*/
+				UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                #ifdef EDITOR_VISUALIZATION
+                    float2 vizUV : TEXCOORD0;
+                    float4 lightCoord : TEXCOORD1;
+                #endif
+                /*ase_interp(2,):sp=sp*/
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            /*ase_globals*/
+            /*ase_funcs*/
+
+            Varyings vert (Attributes attributes/*ase_vert_input*/)
+            {
+                Varyings varyings;
+                UNITY_SETUP_INSTANCE_ID(attributes);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+                UNITY_TRANSFER_INSTANCE_ID(attributes, varyings);
+
+                /*ase_vert_code:attributes=Attributes;varyings=Varyings*/
+
+                varyings.positionCS = UnityMetaVertexPosition(float4(attributes.positionOS, 1.0), attributes.uv1.xy, attributes.uv2.xy, unity_LightmapST, unity_DynamicLightmapST);
+                #ifdef EDITOR_VISUALIZATION
+                    varyings.vizUV = 0;
+                    varyings.lightCoord = 0;
+                    if (unity_VisualizationMode == EDITORVIZ_TEXTURE)
+                        varyings.vizUV = UnityMetaVizUV(unity_EditorViz_UVIndex, attributes.uv0.xy, attributes.uv1.xy, attributes.uv2.xy, unity_EditorViz_Texture_ST);
+                    else if (unity_VisualizationMode == EDITORVIZ_SHOWLIGHTMASK)
+                    {
+                        varyings.vizUV = attributes.uv1.xy * unity_LightmapST.xy + unity_LightmapST.zw;
+                        varyings.lightCoord = mul(unity_EditorViz_WorldToLight, mul(unity_ObjectToWorld, float4(attributes.positionOS, 1)));
+                    }
+                #endif
+
+                return varyings;
+            }
+
+            half3 LightmappingAlbedo(half3 diffuse, half3 specular, half smoothness)
+            {
+                half roughness = SmoothnessToRoughness(smoothness);
+                half3 res = diffuse;
+                res += specular * roughness * 0.5;
+                return res;
+            }
+
+            half4 frag (Varyings varyings/*ase_frag_input*/) : SV_Target
+            {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(varyings);
+                /*ase_frag_code:varyings=Varyings*/
+                half3 albedo = /*ase_frag_out:Albedo;Float3;_Albedo*/1.0/*end*/;
+                half alpha = /*ase_frag_out:Alpha;Float;_Alpha*/1.0/*end*/;
+                half alphaClipThreshold = /*ase_frag_out:Alpha Clip Threshold;Float;_AlphaClip*/0.5/*end*/;
+                half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
+                half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
+                half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
+                half smoothness = 1.0 - roughness;
+
+                UnityMetaInput o;
+                UNITY_INITIALIZE_OUTPUT(UnityMetaInput, o);
+
+                half3 specColor;
+                half oneMinisReflectivity;
+                half3 diffuseColor = DiffuseAndSpecularFromMetallic(albedo, metallic, specColor, oneMinisReflectivity);
+
+                #ifdef EDITOR_VISUALIZATION
+                    o.Albedo = diffuseColor;
+                    o.VizUV = varyings.vizUV;
+                    o.LightCoord = varyings.lightCoord;
+                #else
+                    o.Albedo = LightmappingAlbedo(diffuseColor, specColor, smoothness);
+                #endif
+                
+                o.SpecularColor = specColor;
+                o.Emission = emission;
+
+                #if defined(_ALPHATEST_ON)
+                    clip(alpha - alphaClipThreshold);
+                #endif
+                
+                return UnityMetaFragment(o);
             }
             ENDHLSL
         }
