@@ -144,6 +144,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
                 half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
                 half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float;_GSAAT*/0.1/*end*/;
+                half specularAOIntensity = /*ase_frag_out:Specular Occlusion;Float;_SPAO*/0.0/*end*/;
 
                 #if defined(_NORMALMAP)
                     float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
@@ -171,14 +172,39 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 Filament::EnvironmentBRDF(NoV, roughness, f0, brdf, energyCompensation);
 
                 half3 indirectDiffuse;
+                half3 indirectOcclusion;
                 #if defined(LIGHTMAP_ON)
+                    half3 illuminance = DecodeLightmap(unity_Lightmap.SampleLevel(custom_bilinear_clamp_sampler, lightmapUV, 0));
 
+                    #if defined(DIRLIGHTMAP_COMBINED) || defined(_BAKERY_MONOSH)
+                        half4 directionalLightmap = unity_LightmapInd.SampleLevel(custom_bilinear_clamp_sampler, lightmapUV, 0);
+                        #ifdef _BAKERY_MONOSH
+                            half3 L0 = illuminance;
+                            half3 nL1 = directionalLightmap * 2.0 - 1.0;
+                            half3 L1x = nL1.x * L0 * 2.0;
+                            half3 L1y = nL1.y * L0 * 2.0;
+                            half3 L1z = nL1.z * L0 * 2.0;
+                            half3 sh = L0 + normalWS.x * L1x + normalWS.y * L1y + normalWS.z * L1z;
+                            illuminance = sh;
+                        #else
+                            half halfLambert = dot(normalWS, directionalLightmap.xyz - 0.5) + 0.5;
+                            illuminance = illuminance * halfLambert / max(1e-4, directionalLightmap.w);
+                        #endif
+                    #endif
+                    indirectDiffuse = illuminance;
+
+                    #if defined(_BAKERY_MONOSH)
+                        indirectOcclusion = (dot(nL1, reflectVector) + 1.0) * L0 * 2.0;
+                    #else
+                        indirectOcclusion = illuminance;
+                    #endif
                 #else
                     #if UNITY_SAMPLE_FULL_SH_PER_PIXEL
                         indirectDiffuse = ShadeSHPerPixel(normalWS, 0.0, positionWS);
                     #else
                         indirectDiffuse = ShadeSHPerPixel(normalWS, varyings.sh, positionWS);
                     #endif
+                    indirectOcclusion = indirectDiffuse;
                 #endif
                 indirectDiffuse = max(0.0, indirectDiffuse);
 
@@ -216,12 +242,12 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 #endif
 
                 indirectSpecular *= energyCompensation * brdf;
-
-                half indirectOcclusion = occlusion;
-
                 directSpecular *= UNITY_PI;
 
-                half4 color = half4(albedo * (1.0 - metallic) * (indirectDiffuse * indirectOcclusion + directDiffuse), alpha);
+                half specularAO = lerp(1.0, saturate(sqrt(dot(indirectOcclusion + directDiffuse, 1.0))), specularAOIntensity) * Filament::ComputeSpecularAO(NoV, occlusion, roughness2);
+                indirectSpecular *= specularAO;
+
+                half4 color = half4(albedo * (1.0 - metallic) * (indirectDiffuse * occlusion + directDiffuse), alpha);
                 color.rgb += directSpecular + indirectSpecular;
                 color.rgb += emission;
 
