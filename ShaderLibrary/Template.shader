@@ -128,6 +128,9 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 /*ase_local_var:wvd*/float3 viewDirectionWS = normalize(UnityWorldSpaceViewDir(positionWS));
 
                 Light light = Light::Initialize(varyings);
+                /*ase_local_var*/half3 lightColor = light.color;
+                /*ase_local_var*/half3 lightDirection = light.direction;
+                /*ase_local_var*/half lightAttenuation = light.attenuation;
 
                 /*ase_frag_code:varyings=Varyings*/
                 half3 albedo = /*ase_frag_out:Albedo;Float3;_Albedo*/1.0/*end*/;
@@ -178,18 +181,62 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 #endif
                 indirectDiffuse = max(0.0, indirectDiffuse);
 
+                half3 directDiffuse = 0;
+                half3 directSpecular = 0;
+                half3 indirectSpecular = 0;
 
-                half NoL = saturate(dot(normalWS, light.direction));
+                // main light
+                #if defined(UNITY_PASS_FORWARDBASE) && !defined(DIRECTIONAL_COOKIE) && !defined(SHADOWS_SCREEN) && !defined(_SPECULARHIGHLIGHTS_OFF) && !defined(SHADOWS_SHADOWMASK) && !defined(LIGHTMAP_SHADOW_MIXING)
+                    #ifdef DIRECTIONAL // always defined
+                        bool lightEnabled = any(light.color);
+                        UNITY_BRANCH // avoid calculating directional light in some cases, used in the if statement below
+                    #else
+                        bool lightEnabled = false;
+                    #endif
+                #else
+                    bool lightEnabled = true;
+                #endif
+                if (lightEnabled)
+                {
+                    ShadeLight(light, viewDirectionWS, normalWS, roughness, NoV, f0, energyCompensation, directDiffuse, directSpecular);
+                }
 
-                half4 color = half4(albedo * (indirectDiffuse + NoL * light.attenuation), alpha);
+                // reflection probes
+                #if !defined(_GLOSSYREFLECTIONS_OFF)
+                    Unity_GlossyEnvironmentData envData;
+                    envData.roughness = roughness;
+                    envData.reflUVW = BoxProjectedCubemapDirection(reflectVector, positionWS, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
 
+                    half3 probe0 = Unity_GlossyEnvironment(UNITY_PASS_TEXCUBE(unity_SpecCube0), unity_SpecCube0_HDR, envData);
+                    half3 reflectionSpecular = probe0;
+
+                    #if defined(UNITY_SPECCUBE_BLENDING)
+                        UNITY_BRANCH
+                        if (unity_SpecCube0_BoxMin.w < 0.99999)
+                        {
+                            envData.reflUVW = BoxProjectedCubemapDirection(reflectVector, positionWS, unity_SpecCube1_ProbePosition, unity_SpecCube1_BoxMin, unity_SpecCube1_BoxMax);
+                            float3 probe1 = Unity_GlossyEnvironment(UNITY_PASS_TEXCUBE_SAMPLER(unity_SpecCube1, unity_SpecCube0), unity_SpecCube1_HDR, envData);
+                            reflectionSpecular = lerp(probe1, probe0, unity_SpecCube0_BoxMin.w);
+                        }
+                    #endif
+                #endif
+
+                #if !defined(QUALITY_LOW)
+                    float horizon = min(1.0 + dot(reflectVector, normalWS), 1.0);
+                    indirectSpecular *= horizon * horizon;
+                #endif
+
+                indirectSpecular *= energyCompensation * brdf;
+
+                half4 color = half4(albedo * (indirectDiffuse + directDiffuse), alpha);
+                color.rgb += (directSpecular + indirectSpecular) * UNITY_PI;
                 color.rgb += emission;
+
                 UNITY_APPLY_FOG(i.fogCoord, color);
                 return color;
             }
             ENDHLSL
         }
-
         /*ase_pass*/
         Pass
         {
@@ -335,9 +382,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 return varyings;
             }
 
-            half3 LightmappingAlbedo(half3 diffuse, half3 specular, half smoothness)
+            half3 LightmappingAlbedo(half3 diffuse, half3 specular, half roughness)
             {
-                half roughness = SmoothnessToRoughness(smoothness);
                 half3 res = diffuse;
                 res += specular * roughness * 0.5;
                 return res;
@@ -353,7 +399,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
                 half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
                 half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
-                half smoothness = 1.0 - roughness;
 
                 UnityMetaInput o;
                 UNITY_INITIALIZE_OUTPUT(UnityMetaInput, o);
@@ -367,7 +412,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     o.VizUV = varyings.vizUV;
                     o.LightCoord = varyings.lightCoord;
                 #else
-                    o.Albedo = LightmappingAlbedo(diffuseColor, specColor, smoothness);
+                    o.Albedo = LightmappingAlbedo(diffuseColor, specColor, roughness);
                 #endif
                 
                 o.SpecularColor = specColor;

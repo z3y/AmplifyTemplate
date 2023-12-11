@@ -56,3 +56,55 @@ struct Light
         return light;
     }
 };
+
+void ShadeLight(Light light, float3 viewDirectionWS, float3 normalWS, half roughness, half NoV, half3 f0, half3 energyCompensation, inout half3 color, inout half3 specular)
+{
+    float3 lightDirection = light.direction;
+    float3 lightHalfVector = normalize(lightDirection + viewDirectionWS);
+    half lightNoL = saturate(dot(normalWS, lightDirection));
+    half lightLoH = saturate(dot(lightDirection, lightHalfVector));
+    half lightNoH = saturate(dot(normalWS, lightHalfVector));
+
+    half3 lightColor = light.attenuation * light.color;
+    half3 lightFinalColor = lightNoL * lightColor;
+
+#ifdef UNITY_PASS_FORWARDBASE
+    #if !defined(QUALITY_LOW) && !defined(LIGHTMAP_ON)
+        lightFinalColor *= Filament::Fd_Burley(roughness, NoV, lightNoL, lightLoH);
+    #endif
+#endif
+
+    color += lightFinalColor;
+
+    #ifndef _SPECULARHIGHLIGHTS_OFF
+
+        half clampedRoughness = max(roughness * roughness, 0.002);
+
+        #ifdef _ANISOTROPY
+            // half at = max(clampedRoughness * (1.0 + surfaceDescription.Anisotropy), 0.001);
+            // half ab = max(clampedRoughness * (1.0 - surfaceDescription.Anisotropy), 0.001);
+
+            // float3 l = light.direction;
+            // float3 t = sd.tangentWS;
+            // float3 b = sd.bitangentWS;
+            // float3 v = viewDirectionWS;
+
+            // half ToV = dot(t, v);
+            // half BoV = dot(b, v);
+            // half ToL = dot(t, l);
+            // half BoL = dot(b, l);
+            // half ToH = dot(t, lightHalfVector);
+            // half BoH = dot(b, lightHalfVector);
+
+            // half3 F = Filament::F_Schlick(lightLoH, sd.f0) * energyCompensation;
+            // half D = Filament::D_GGX_Anisotropic(lightNoH, lightHalfVector, t, b, at, ab);
+            // half V = Filament::V_SmithGGXCorrelated_Anisotropic(at, ab, ToV, BoV, ToL, BoL, NoV, lightNoL);
+        #else
+            half3 F = Filament::F_Schlick(lightLoH, f0) * energyCompensation;
+            half D = Filament::D_GGX(lightNoH, clampedRoughness);
+            half V = Filament::V_SmithGGXCorrelated(NoV, lightNoL, clampedRoughness);
+        #endif
+
+        specular += max(0.0, (D * V) * F) * lightFinalColor;
+    #endif
+}
