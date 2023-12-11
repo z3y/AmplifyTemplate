@@ -186,20 +186,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half3 indirectSpecular = 0;
 
                 // main light
-                #if defined(UNITY_PASS_FORWARDBASE) && !defined(DIRECTIONAL_COOKIE) && !defined(SHADOWS_SCREEN) && !defined(_SPECULARHIGHLIGHTS_OFF) && !defined(SHADOWS_SHADOWMASK) && !defined(LIGHTMAP_SHADOW_MIXING)
-                    #ifdef DIRECTIONAL // always defined
-                        bool lightEnabled = any(light.color);
-                        UNITY_BRANCH // avoid calculating directional light in some cases, used in the if statement below
-                    #else
-                        bool lightEnabled = false;
-                    #endif
-                #else
-                    bool lightEnabled = true;
-                #endif
-                if (lightEnabled)
-                {
-                    ShadeLight(light, viewDirectionWS, normalWS, roughness, NoV, f0, energyCompensation, directDiffuse, directSpecular);
-                }
+                ShadeLight(light, viewDirectionWS, normalWS, roughness, NoV, f0, energyCompensation, directDiffuse, directSpecular);
 
                 // reflection probes
                 #if !defined(_GLOSSYREFLECTIONS_OFF)
