@@ -139,6 +139,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 float3 normalTS = /*ase_frag_out:Normal;Float3;_NormalTS*/float3(0, 0, 1)/*end*/;
                 half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
                 half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
+                half occlusion = /*ase_frag_out:Occlusion;Float;_Occlusion*/1.0/*end*/;
                 half reflectance = /*ase_frag_out:Reflectance;Float;_Reflectance*/0.5/*end*/;
                 half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
                 half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
@@ -206,6 +207,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                             reflectionSpecular = lerp(probe1, probe0, unity_SpecCube0_BoxMin.w);
                         }
                     #endif
+                    indirectSpecular += reflectionSpecular;
                 #endif
 
                 #if !defined(QUALITY_LOW)
@@ -215,8 +217,12 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 
                 indirectSpecular *= energyCompensation * brdf;
 
-                half4 color = half4(albedo * (indirectDiffuse + directDiffuse), alpha);
-                color.rgb += (directSpecular + indirectSpecular) * UNITY_PI;
+                half indirectOcclusion = occlusion;
+
+                directSpecular *= UNITY_PI;
+
+                half4 color = half4(albedo * (1.0 - metallic) * (indirectDiffuse * indirectOcclusion + directDiffuse), alpha);
+                color.rgb += directSpecular + indirectSpecular;
                 color.rgb += emission;
 
                 UNITY_APPLY_FOG(i.fogCoord, color);
