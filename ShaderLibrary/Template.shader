@@ -17,17 +17,20 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             Tags { "LightMode" = "ForwardBase" }
 
             HLSLPROGRAM
+            #pragma target 4.5 
             #pragma vertex vert
             #pragma fragment frag
             #pragma multi_compile_fwdbase
             #pragma multi_compile_fog
             #pragma multi_compile_instancing
+            #pragma skip_variants LIGHTPROBE_SH
             /*ase_pragma*/
 
+            #define pos positionCS
+            #define vertex positionOS
             #include "UnityCG.cginc"
             #include "Lighting.cginc"
             #include "AutoLight.cginc"
-            #include "Packages/com.z3y.shadersamplify/ShaderLibrary/Functions.hlsl"
 
             struct Attributes
             {
@@ -53,10 +56,16 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     centroid float2 lightmapUV : TEXCOORD4;
                 #endif
                 UNITY_FOG_COORDS(5)
-                /*ase_interp(6,):sp=sp;wp=tc0;wn=tc1;wt=tc2*/
+                UNITY_SHADOW_COORDS(6)
+                #if !UNITY_SAMPLE_FULL_SH_PER_PIXEL
+                    float3 sh : TEXCOORD7;
+                #endif
+                /*ase_interp(8,):sp=sp;wp=tc0;wn=tc1;wt=tc2*/
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 				UNITY_VERTEX_OUTPUT_STEREO
             };
+
+            #include "Packages/com.z3y.shadersamplify/ShaderLibrary/Functions.hlsl"
 
             /*ase_globals*/
             /*ase_funcs*/
@@ -87,6 +96,11 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     varyings.lightmapUV.zw = mad(attributes.uv2.xy, unity_DynamicLightmapST.xy, unity_DynamicLightmapST.zw);
                 #endif
 
+                #if !UNITY_SAMPLE_FULL_SH_PER_PIXEL
+                    varyings.sh = ShadeSHPerVertex(varyings.normalWS, 0);
+                #endif
+
+                UNITY_TRANSFER_SHADOW(varyings, attributes.uv1.xy);
                 UNITY_TRANSFER_FOG(varyings, varyings.positionCS);
                 return varyings;
             }
@@ -110,6 +124,9 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 /*ase_local_var:wbt*/float3 geometricBitangentWS = normalize(bitangentWS);
                 /*ase_local_var:wp*/float3 positionWS = varyings.positionWS;
                 /*ase_local_var:wvd*/float3 viewDirectionWS = normalize(UnityWorldSpaceViewDir(positionWS));
+
+                Light light = Light::Initialize(varyings);
+
 
                 /*ase_frag_code:varyings=Varyings*/
                 half3 albedo = /*ase_frag_out:Albedo;Float3*/1.0/*end*/;
@@ -143,12 +160,103 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     reflectVector = lerp(reflectVector, normalWS, roughness2);
                 #endif
                 half3 f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + albedo * metallic;
+                half3 brdf;
+                half3 energyCompensation;
+                Filament::EnvironmentBRDF(NoV, roughness, f0, brdf, energyCompensation);
 
-                half4 color = half4(albedo, alpha);
+                half3 indirectDiffuse;
+                #if defined(LIGHTMAP_ON)
+
+                #else
+                    #if UNITY_SAMPLE_FULL_SH_PER_PIXEL
+                        indirectDiffuse = ShadeSHPerPixel(normalWS, 0.0, positionWS);
+                    #else
+                        indirectDiffuse = ShadeSHPerPixel(normalWS, varyings.sh, positionWS);
+                    #endif
+                #endif
+                indirectDiffuse = max(0.0, indirectDiffuse);
+
+
+                half NoL = saturate(dot(normalWS, light.direction));
+
+                UNITY_LIGHT_ATTENUATION(atteattnuation, varyings, varyings.positionWS.xyz);
+
+                return atteattnuation;
+
+
+
+                half4 color = half4(albedo * indirectDiffuse, alpha);
 
                 color.rgb += emission;
                 UNITY_APPLY_FOG(i.fogCoord, color);
                 return color;
+            }
+            ENDHLSL
+        }
+
+        /*ase_pass*/
+        Pass
+        {
+            /*ase_hide_pass*/
+            Name "SHADOWCASTER"
+            Tags { "LightMode"="ShadowCaster" }
+            ZWrite On
+            Cull Off
+            ZTest LEqual
+
+            HLSLPROGRAM
+            #pragma target 4.5
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma multi_compile_shadowcaster
+            #pragma multi_compile_instancing
+            /*ase_pragma*/
+
+            #define pos positionCS
+            #define vertex positionOS
+            #define normal normalOS
+            #include "UnityCG.cginc"
+            // #include "Lighting.cginc"
+            // #include "AutoLight.cginc"
+
+            struct Attributes
+            {
+                float3 positionOS : POSITION;
+                float3 normalOS : NORMAL;
+                /*ase_vdata:p=p;n=n*/
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                /*ase_interp(1,):sp=sp*/
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            /*ase_globals*/
+            /*ase_funcs*/
+
+            Varyings vert (Attributes attributes/*ase_vert_input*/)
+            {
+                Varyings varyings;
+                UNITY_SETUP_INSTANCE_ID(attributes);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+                UNITY_TRANSFER_INSTANCE_ID(attributes, varyings);
+
+                /*ase_vert_code:attributes=Attributes;varyings=Varyings*/
+
+                Attributes v = attributes;
+                TRANSFER_SHADOW_CASTER_NOPOS(varyings, varyings.positionCS);
+                return varyings;
+            }
+
+            void frag (Varyings varyings/*ase_frag_input*/)
+            {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(varyings);
+                /*ase_frag_code:varyings=Varyings*/
+                half alpha = /*ase_frag_out:Alpha;Float*/1.0/*end*/;
             }
             ENDHLSL
         }

@@ -128,13 +128,13 @@ namespace Filament
         return saturate(lerp(a0, a1, f0));
     }
 
-    void EnvironmentBRDF(Texture2D dfgTex, SamplerState dfgSampler, half NoV, half perceptualRoughness, half3 f0, out half3 brdf, out half3 energyCompensation)
+    void EnvironmentBRDF(half NoV, half perceptualRoughness, half3 f0, out half3 brdf, out half3 energyCompensation)
     {
-        #if defined(CBIRP_LOW)
+        #if defined(QUALITY_LOW)
             energyCompensation = 1.0;
             brdf = EnvironmentBRDFApproximation(perceptualRoughness, NoV, f0);
         #else
-            float2 dfg = dfgTex.SampleLevel(dfgSampler, float2(NoV, perceptualRoughness), 0).rg;
+            float2 dfg = _DFG.SampleLevel(custom_bilinear_clamp_sampler, float2(NoV, perceptualRoughness), 0).rg;
             brdf = lerp(dfg.xxx, dfg.yyy, f0);
             energyCompensation = 1.0 + f0 * (1.0 / dfg.y - 1.0);
         #endif
