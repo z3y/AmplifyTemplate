@@ -58,7 +58,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     centroid float2 lightmapUV : TEXCOORD4;
                 #endif
                 UNITY_FOG_COORDS(5)
-                UNITY_SHADOW_COORDS(6)
+                SHADOW_COORDS(6)
                 #if !UNITY_SAMPLE_FULL_SH_PER_PIXEL
                     float3 sh : TEXCOORD7;
                 #endif
@@ -181,7 +181,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 
                 half NoL = saturate(dot(normalWS, light.direction));
 
-                half4 color = half4(albedo * indirectDiffuse + NoL, alpha);
+                half4 color = half4(albedo * (indirectDiffuse + NoL * light.attenuation), alpha);
 
                 color.rgb += emission;
                 UNITY_APPLY_FOG(i.fogCoord, color);
