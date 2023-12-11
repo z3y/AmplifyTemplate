@@ -300,10 +300,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 float3 positionOS : POSITION;
 				float3 normalOS : NORMAL;
                 float4 tangentOS : TANGENT;
-                float4 uv0 : TEXCOORD0;
-                float4 uv1 : TEXCOORD1;
-                float4 uv2 : TEXCOORD2;
-                /*ase_vdata:p=p;n=n;t=t;uv0=tc0;uv1=tc1;uv2=tc2*/
+                /*ase_vdata:p=p;n=n;t=t*/
 				UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -382,7 +379,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
                 half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
                 half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float;_GSAAT*/0.1/*end*/;
-                half specularAOIntensity = /*ase_frag_out:Specular Occlusion;Float;_SPAO*/1.0/*end*/;
 
                 #if defined(_NORMALMAP)
                     float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
