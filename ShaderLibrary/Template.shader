@@ -613,6 +613,18 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             /*ase_globals*/
             /*ase_funcs*/
 
+            float4 WorldToPositionCS(float3 positionWS)
+            {
+                float4 clipPos;
+                #if defined(STEREO_CUBEMAP_RENDER_ON)
+                    float3 offset = ODSOffset(positionWS, unity_HalfStereoSeparation.x);
+                    clipPos = mul(UNITY_MATRIX_VP, float4(positionWS + offset, 1.0));
+                #else
+                    clipPos = mul(UNITY_MATRIX_VP, float4(positionWS, 1.0));
+                #endif
+                return clipPos;
+            }
+
             Varyings vert (Attributes attributes/*ase_vert_input*/)
             {
                 Varyings varyings;
@@ -620,9 +632,22 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(varyings);
                 UNITY_TRANSFER_INSTANCE_ID(attributes, varyings);
 
-                /*ase_vert_code:attributes=Attributes;varyings=Varyings*/
+                float3 positionWS = mul(unity_ObjectToWorld, float4(attributes.positionOS, 1.0)).xyz;
 
-                varyings.positionCS = UnityMetaVertexPosition(float4(attributes.positionOS, 1.0), attributes.uv1.xy, attributes.uv2.xy, unity_LightmapST, unity_DynamicLightmapST);
+                /*ase_vert_code:attributes=Attributes;varyings=Varyings*/
+                float3 positionWSOverride = /*ase_vert_out:Vertex Position WS;Float3;_PositionWS*/0.0/*end*/;
+				#if !defined(_ABSOLUTE_VERTEX_POS)
+					positionWS += positionWSOverride;
+                #else
+                    positionWS = positionWSOverride;
+                #endif
+
+                #if defined(EDITOR_VISUALIZATION)
+                    varyings.positionCS = WorldToPositionCS(positionWS);
+                #else
+                    // TODO: figure out if attributes position is already in world space when lightmapping
+                    varyings.positionCS = UnityMetaVertexPosition(float4(attributes.positionOS, 1.0), attributes.uv1.xy, attributes.uv2.xy, unity_LightmapST, unity_DynamicLightmapST);
+                #endif
                 #ifdef EDITOR_VISUALIZATION
                     varyings.vizUV = 0;
                     varyings.lightCoord = 0;
