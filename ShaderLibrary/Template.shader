@@ -20,6 +20,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 			Option:GSAA:true,false:false
 				false:RemoveDefine:_GEOMETRIC_SPECULAR_AA
 				true:SetDefine:_GEOMETRIC_SPECULAR_AA
+			Option:Vertex Position,InvertActionOnDeselection:Absolute,Relative:Relative
+				Absolute:SetDefine:_ABSOLUTE_VERTEX_POS 1
         */
         Tags { "RenderType"="Opaque" "Queue" = "Geometry+0" "DisableBatching" = "False" }
         /*ase_all_modules*/
@@ -95,6 +97,17 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 
                 /*ase_vert_code:attributes=Attributes;varyings=Varyings*/
 
+				float3 positionOSOverride = /*ase_vert_out:Vertex Position OS;Float3;_PositionOS*/0.0/*end*/;
+				float3 normalOSOverride = /*ase_vert_out:Vertex Normal OS;Float3;_NormalOS*/attributes.normalOS/*end*/;
+				float4 tangentOSOverride = /*ase_vert_out:Vertex Tangent OS;Float4;_TangentOS*/attributes.tangentOS/*end*/;
+				#if !defined(_ABSOLUTE_VERTEX_POS)
+					positionOSOverride += attributes.positionOS;
+				#endif
+
+				attributes.positionOS = positionOSOverride;
+				attributes.normalOS = normalOSOverride;
+				attributes.tangentOS = tangentOSOverride;
+
                 float4 positionCS = UnityObjectToClipPos(attributes.positionOS);
                 float3 positionWS = mul(unity_ObjectToWorld, float4(attributes.positionOS, 1.0)).xyz;
                 float3 normalWS = UnityObjectToWorldNormal(attributes.normalOS);
@@ -129,7 +142,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     lightmapUV = varyings.lightmapUV;
                 #endif
                 
-                // float renormFactor = 1.0 / length(varyings.normalWS.xyz);
                 float oddNegativeScale = unity_WorldTransformParams.w;
                 float crossSign = (varyings.tangentWS.w > 0.0 ? 1.0 : -1.0) * oddNegativeScale;
                 float3 bitangentWS = crossSign * cross(varyings.normalWS.xyz, varyings.tangentWS.xyz);
@@ -148,14 +160,14 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 
                 /*ase_frag_code:varyings=Varyings*/
                 half3 albedo = /*ase_frag_out:Albedo;Float3;_Albedo*/1.0/*end*/;
+                float3 normalTS = /*ase_frag_out:Normal TS;Float3;_Normal*/float3(0, 0, 1)/*end*/;
+                half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
+                half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
+                half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
+                half reflectance = /*ase_frag_out:Reflectance;Float;_Reflectance*/0.5/*end*/;
+                half occlusion = /*ase_frag_out:Occlusion;Float;_Occlusion*/1.0/*end*/;
                 half alpha = /*ase_frag_out:Alpha;Float;_Alpha*/1.0/*end*/;
                 half alphaClipThreshold = /*ase_frag_out:Alpha Clip Threshold;Float;_AlphaClip*/0.5/*end*/;
-                float3 normalTS = /*ase_frag_out:Normal;Float3;_Normal*/float3(0, 0, 1)/*end*/;
-                half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
-                half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
-                half occlusion = /*ase_frag_out:Occlusion;Float;_Occlusion*/1.0/*end*/;
-                half reflectance = /*ase_frag_out:Reflectance;Float;_Reflectance*/0.5/*end*/;
-                half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
                 half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
                 half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float;_GSAAT*/0.1/*end*/;
                 half specularAOIntensity = /*ase_frag_out:Specular Occlusion;Float;_SPAO*/1.0/*end*/;
@@ -392,14 +404,13 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 
                 /*ase_frag_code:varyings=Varyings*/
                 half3 albedo = /*ase_frag_out:Albedo;Float3;_Albedo*/1.0/*end*/;
+                float3 normalTS = /*ase_frag_out:Normal TS;Float3;_Normal*/float3(0, 0, 1)/*end*/;
+                half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
+                half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
+                half reflectance = /*ase_frag_out:Reflectance;Float;_Reflectance*/0.5/*end*/;
+                half occlusion = /*ase_frag_out:Occlusion;Float;_Occlusion*/1.0/*end*/;
                 half alpha = /*ase_frag_out:Alpha;Float;_Alpha*/1.0/*end*/;
                 half alphaClipThreshold = /*ase_frag_out:Alpha Clip Threshold;Float;_AlphaClip*/0.5/*end*/;
-                float3 normalTS = /*ase_frag_out:Normal;Float3;_Normal*/float3(0, 0, 1)/*end*/;
-                half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
-                half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
-                half occlusion = /*ase_frag_out:Occlusion;Float;_Occlusion*/1.0/*end*/;
-                half reflectance = /*ase_frag_out:Reflectance;Float;_Reflectance*/0.5/*end*/;
-                half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
                 half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
                 half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float;_GSAAT*/0.1/*end*/;
 
@@ -440,7 +451,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 
                 half4 color = half4(albedo * (1.0 - metallic) * directDiffuse, alpha);
                 color.rgb += directSpecular;
-                color.rgb += emission;
 
                 UNITY_APPLY_FOG(i.fogCoord, color);
                 return color;
