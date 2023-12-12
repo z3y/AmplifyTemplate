@@ -3,18 +3,32 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 {
     Properties
     {
-        [HideInInspector] [NonModifiableTextureData] [NoScaleOffset] _DFG ("DFG", 2D) = "" {}
+        [HideInInspector] [NonModifiableTextureData] [NoScaleOffset] _DFG ("DFG", 2D) = "black" {}
         /*ase_props*/
     }
     SubShader
     {
+        /*ase_subshader_options:Name=Additional Options
+			Option:Bicubic Lightmap:true,false:false
+				false:RemoveDefine:_BICUBIC_LIGHTMAP
+				true:SetDefine:_BICUBIC_LIGHTMAP
+			Option:Mono SH:true,false:false
+				false:RemoveDefine:_BAKERY_MONOSH
+				true:SetDefine:_BAKERY_MONOSH
+			Port:ForwardBase:Normal
+				On:SetDefine:_NORMALMAP
+			Option:GSAA:true,false:false
+				false:RemoveDefine:_GEOMETRIC_SPECULAR_AA
+				true:SetDefine:_GEOMETRIC_SPECULAR_AA
+        */
         Tags { "RenderType"="Opaque" "Queue" = "Geometry+0" "DisableBatching" = "False" }
         /*ase_all_modules*/
 		/*ase_pass*/
+
         Pass
         {
             /*ase_main_pass*/
-            Name "Forward"
+            Name "ForwardBase"
             Tags { "LightMode" = "ForwardBase" }
 
             HLSLPROGRAM
@@ -136,7 +150,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half3 albedo = /*ase_frag_out:Albedo;Float3;_Albedo*/1.0/*end*/;
                 half alpha = /*ase_frag_out:Alpha;Float;_Alpha*/1.0/*end*/;
                 half alphaClipThreshold = /*ase_frag_out:Alpha Clip Threshold;Float;_AlphaClip*/0.5/*end*/;
-                float3 normalTS = /*ase_frag_out:Normal;Float3;_NormalTS*/float3(0, 0, 1)/*end*/;
+                float3 normalTS = /*ase_frag_out:Normal;Float3;_Normal*/float3(0, 0, 1)/*end*/;
                 half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
                 half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
                 half occlusion = /*ase_frag_out:Occlusion;Float;_Occlusion*/1.0/*end*/;
@@ -174,10 +188,19 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half3 indirectDiffuse;
                 half3 indirectOcclusion;
                 #if defined(LIGHTMAP_ON)
-                    half3 illuminance = DecodeLightmap(unity_Lightmap.SampleLevel(custom_bilinear_clamp_sampler, lightmapUV, 0));
+                    #if defined(_BICUBIC_LIGHTMAP) && !defined(QUALITY_LOW)
+                        float4 texelSize = TexelSizeFromTexture2D(unity_Lightmap);
+                        half3 illuminance = SampleTexture2DBicubic(unity_Lightmap, custom_bilinear_clamp_sampler, lightmapUV, texelSize, 1.0).rgb;
+                    #else
+                        half3 illuminance = DecodeLightmap(unity_Lightmap.SampleLevel(custom_bilinear_clamp_sampler, lightmapUV, 0));
+                    #endif
 
                     #if defined(DIRLIGHTMAP_COMBINED) || defined(_BAKERY_MONOSH)
-                        half4 directionalLightmap = unity_LightmapInd.SampleLevel(custom_bilinear_clamp_sampler, lightmapUV, 0);
+                        #if defined(_BICUBIC_LIGHTMAP) && !defined(QUALITY_LOW)
+                            half4 directionalLightmap = SampleTexture2DBicubic(unity_LightmapInd, custom_bilinear_clamp_sampler, lightmapUV, texelSize, 1.0);
+                        #else
+                            half4 directionalLightmap = unity_LightmapInd.SampleLevel(custom_bilinear_clamp_sampler, lightmapUV, 0);
+                        #endif
                         #ifdef _BAKERY_MONOSH
                             half3 L0 = illuminance;
                             half3 nL1 = directionalLightmap * 2.0 - 1.0;
@@ -371,7 +394,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half3 albedo = /*ase_frag_out:Albedo;Float3;_Albedo*/1.0/*end*/;
                 half alpha = /*ase_frag_out:Alpha;Float;_Alpha*/1.0/*end*/;
                 half alphaClipThreshold = /*ase_frag_out:Alpha Clip Threshold;Float;_AlphaClip*/0.5/*end*/;
-                float3 normalTS = /*ase_frag_out:Normal;Float3;_NormalTS*/float3(0, 0, 1)/*end*/;
+                float3 normalTS = /*ase_frag_out:Normal;Float3;_Normal*/float3(0, 0, 1)/*end*/;
                 half roughness = /*ase_frag_out:Roughness;Float;_Roughness*/0.5/*end*/;
                 half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
                 half occlusion = /*ase_frag_out:Occlusion;Float;_Occlusion*/1.0/*end*/;
