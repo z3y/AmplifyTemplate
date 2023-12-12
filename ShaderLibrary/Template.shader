@@ -631,23 +631,11 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 UNITY_SETUP_INSTANCE_ID(attributes);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(varyings);
                 UNITY_TRANSFER_INSTANCE_ID(attributes, varyings);
-
-                float3 positionWS = mul(unity_ObjectToWorld, float4(attributes.positionOS, 1.0)).xyz;
-
+                
                 /*ase_vert_code:attributes=Attributes;varyings=Varyings*/
-                float3 positionWSOverride = /*ase_vert_out:Vertex Position WS;Float3;_PositionWS*/0.0/*end*/;
-				#if !defined(_ABSOLUTE_VERTEX_POS)
-					positionWS += positionWSOverride;
-                #else
-                    positionWS = positionWSOverride;
-                #endif
 
-                #if defined(EDITOR_VISUALIZATION)
-                    varyings.positionCS = WorldToPositionCS(positionWS);
-                #else
-                    // TODO: figure out if attributes position is already in world space when lightmapping
-                    varyings.positionCS = UnityMetaVertexPosition(float4(attributes.positionOS, 1.0), attributes.uv1.xy, attributes.uv2.xy, unity_LightmapST, unity_DynamicLightmapST);
-                #endif
+                varyings.positionCS = UnityMetaVertexPosition(float4(attributes.positionOS, 1.0), attributes.uv1.xy, attributes.uv2.xy, unity_LightmapST, unity_DynamicLightmapST);
+
                 #ifdef EDITOR_VISUALIZATION
                     varyings.vizUV = 0;
                     varyings.lightCoord = 0;
