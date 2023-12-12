@@ -1,4 +1,5 @@
 /*applydfg*/
+// Created from amplify template - https://github.com/z3y/ShadersAmplify
 Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 {
     Properties
@@ -92,31 +93,24 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             {
                 Varyings varyings;
 				UNITY_SETUP_INSTANCE_ID(attributes);
-				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(varyings);
 				UNITY_TRANSFER_INSTANCE_ID(attributes, varyings);
 
+                varyings.positionWS = mul(unity_ObjectToWorld, float4(attributes.positionOS, 1.0)).xyz;
+                varyings.normalWS = UnityObjectToWorldNormal(attributes.normalOS);
+                varyings.tangentWS  = float4(UnityObjectToWorldDir(attributes.tangentOS.xyz), attributes.tangentOS.w);
+
                 /*ase_vert_code:attributes=Attributes;varyings=Varyings*/
-
-				float3 positionOSOverride = /*ase_vert_out:Vertex Position OS;Float3;_PositionOS*/0.0/*end*/;
-				float3 normalOSOverride = /*ase_vert_out:Vertex Normal OS;Float3;_NormalOS*/attributes.normalOS/*end*/;
-				float4 tangentOSOverride = /*ase_vert_out:Vertex Tangent OS;Float4;_TangentOS*/attributes.tangentOS/*end*/;
+                float3 positionWSOverride = /*ase_vert_out:Vertex Position WS;Float3;_PositionWS*/0.0/*end*/;
 				#if !defined(_ABSOLUTE_VERTEX_POS)
-					positionOSOverride += attributes.positionOS;
-				#endif
+					varyings.positionWS += positionWSOverride;
+                #else
+                    varyings.positionWS = positionWSOverride;
+                #endif
+				varyings.normalWS = /*ase_vert_out:Vertex Normal WS;Float3;_NormalWS*/varyings.normalWS/*end*/;
+				varyings.tangentWS = /*ase_vert_out:Vertex Tangent WS;Float4;_TangentWS*/varyings.tangentWS/*end*/;
 
-				attributes.positionOS = positionOSOverride;
-				attributes.normalOS = normalOSOverride;
-				attributes.tangentOS = tangentOSOverride;
-
-                float4 positionCS = UnityObjectToClipPos(attributes.positionOS);
-                float3 positionWS = mul(unity_ObjectToWorld, float4(attributes.positionOS, 1.0)).xyz;
-                float3 normalWS = UnityObjectToWorldNormal(attributes.normalOS);
-                float4 tangentWS = float4(UnityObjectToWorldDir(attributes.tangentOS.xyz), attributes.tangentOS.w);
-
-                varyings.positionCS = positionCS;
-                varyings.positionWS = positionWS;
-                varyings.normalWS = normalWS;
-                varyings.tangentWS = tangentWS;
+                varyings.positionCS = WorldToPositionCS(varyings.positionWS);
 
                 #if defined(LIGHTMAP_ON)
                     varyings.lightmapUV.xy = mad(attributes.uv1.xy, unity_LightmapST.xy, unity_LightmapST.zw);
@@ -361,20 +355,24 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             {
                 Varyings varyings;
 				UNITY_SETUP_INSTANCE_ID(attributes);
-				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(varyings);
 				UNITY_TRANSFER_INSTANCE_ID(attributes, varyings);
 
+                varyings.positionWS = mul(unity_ObjectToWorld, float4(attributes.positionOS, 1.0)).xyz;
+                varyings.normalWS = UnityObjectToWorldNormal(attributes.normalOS);
+                varyings.tangentWS  = float4(UnityObjectToWorldDir(attributes.tangentOS.xyz), attributes.tangentOS.w);
+
                 /*ase_vert_code:attributes=Attributes;varyings=Varyings*/
+                float3 positionWSOverride = /*ase_vert_out:Vertex Position WS;Float3;_PositionWS*/0.0/*end*/;
+				#if !defined(_ABSOLUTE_VERTEX_POS)
+					varyings.positionWS += positionWSOverride;
+                #else
+                    varyings.positionWS = positionWSOverride;
+                #endif
+				varyings.normalWS = /*ase_vert_out:Vertex Normal WS;Float3;_NormalWS*/varyings.normalWS/*end*/;
+				varyings.tangentWS = /*ase_vert_out:Vertex Tangent WS;Float4;_TangentWS*/varyings.tangentWS/*end*/;
 
-                float4 positionCS = UnityObjectToClipPos(attributes.positionOS);
-                float3 positionWS = mul(unity_ObjectToWorld, float4(attributes.positionOS, 1.0)).xyz;
-                float3 normalWS = UnityObjectToWorldNormal(attributes.normalOS);
-                float4 tangentWS = float4(UnityObjectToWorldDir(attributes.tangentOS.xyz), attributes.tangentOS.w);
-
-                varyings.positionCS = positionCS;
-                varyings.positionWS = positionWS;
-                varyings.normalWS = normalWS;
-                varyings.tangentWS = tangentWS;
+                varyings.positionCS = WorldToPositionCS(varyings.positionWS);
 
                 UNITY_TRANSFER_SHADOW(varyings, attributes.uv1.xy);
                 UNITY_TRANSFER_FOG(varyings, varyings.positionCS);
@@ -477,6 +475,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             #pragma multi_compile_instancing
             /*ase_pragma*/
 
+
             #define pos positionCS
             #define vertex positionOS
             #define normal normalOS
@@ -500,20 +499,55 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
+            
+            float4 WorldToShadowCasterPositionCS(float3 positionWS, float3 normalWS)
+            {
+                if (unity_LightShadowBias.z != 0.0)
+                {
+                    float3 wLight = normalize(UnityWorldSpaceLightDir(positionWS));
+
+                    // apply normal offset bias (inset position along the normal)
+                    // bias needs to be scaled by sine between normal and light direction
+                    // (http://the-witness.net/news/2013/09/shadow-mapping-summary-part-1/)
+                    //
+                    // unity_LightShadowBias.z contains user-specified normal offset amount
+                    // scaled by world space texel size.
+
+                    float shadowCos = dot(normalWS, wLight);
+                    float shadowSine = sqrt(1-shadowCos*shadowCos);
+                    float normalBias = unity_LightShadowBias.z * shadowSine;
+
+                    positionWS -= normalWS * normalBias;
+                }
+
+                return mul(UNITY_MATRIX_VP, float4(positionWS, 1.0));
+            }
+
             /*ase_globals*/
             /*ase_funcs*/
+
 
             Varyings vert (Attributes attributes/*ase_vert_input*/)
             {
                 Varyings varyings;
                 UNITY_SETUP_INSTANCE_ID(attributes);
-                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(varyings);
                 UNITY_TRANSFER_INSTANCE_ID(attributes, varyings);
 
-                /*ase_vert_code:attributes=Attributes;varyings=Varyings*/
+                float3 positionWS = mul(unity_ObjectToWorld, float4(attributes.positionOS, 1.0)).xyz;
+                float3 normalWS = UnityObjectToWorldNormal(attributes.normalOS);
 
-                Attributes v = attributes;
-                TRANSFER_SHADOW_CASTER_NOPOS(varyings, varyings.positionCS);
+                /*ase_vert_code:attributes=Attributes;varyings=Varyings*/
+                float3 positionWSOverride = /*ase_vert_out:Vertex Position WS;Float3;_PositionWS*/0.0/*end*/;
+				#if !defined(_ABSOLUTE_VERTEX_POS)
+					positionWS += positionWSOverride;
+                #else
+                    positionWS = positionWSOverride;
+                #endif
+				normalWS = /*ase_vert_out:Vertex Normal WS;Float3;_NormalWS*/normalWS/*end*/;
+
+                varyings.positionCS = WorldToShadowCasterPositionCS(positionWS, normalWS);
+                varyings.positionCS = UnityApplyLinearShadowBias(varyings.positionCS);
                 return varyings;
             }
 
@@ -583,7 +617,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             {
                 Varyings varyings;
                 UNITY_SETUP_INSTANCE_ID(attributes);
-                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(varyings);
                 UNITY_TRANSFER_INSTANCE_ID(attributes, varyings);
 
                 /*ase_vert_code:attributes=Attributes;varyings=Varyings*/

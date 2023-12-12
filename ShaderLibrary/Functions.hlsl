@@ -8,6 +8,18 @@ SamplerState custom_bilinear_clamp_sampler;
 
 #include "Filament.hlsl"
 
+float4 WorldToPositionCS(float3 positionWS)
+{
+    float4 clipPos;
+    #if defined(STEREO_CUBEMAP_RENDER_ON)
+        float3 offset = ODSOffset(positionWS, unity_HalfStereoSeparation.x);
+        clipPos = mul(UNITY_MATRIX_VP, float4(positionWS + offset, 1.0));
+    #else
+        clipPos = mul(UNITY_MATRIX_VP, float4(positionWS, 1.0));
+    #endif
+    return clipPos;
+}
+
 float3 Orthonormalize(float3 tangent, float3 normal)
 {
     return normalize(tangent - dot(tangent, normal) * normal);
