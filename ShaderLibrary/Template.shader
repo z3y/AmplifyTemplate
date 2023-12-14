@@ -9,21 +9,31 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
     }
     SubShader
     {
-        /*ase_subshader_options:Name=Additional Options
-			Option:Bicubic Lightmap:true,false:false
-				false:RemoveDefine:_BICUBIC_LIGHTMAP
-				true:SetDefine:_BICUBIC_LIGHTMAP
-			Option:Mono SH:true,false:false
-				false:RemoveDefine:_BAKERY_MONOSH
-				true:SetDefine:_BAKERY_MONOSH
-			Port:ForwardBase:Normal
-				On:SetDefine:_NORMALMAP
-			Option:GSAA:true,false:false
-				false:RemoveDefine:_GEOMETRIC_SPECULAR_AA
-				true:SetDefine:_GEOMETRIC_SPECULAR_AA
-			Option:Vertex Position,InvertActionOnDeselection:Absolute,Relative:Relative
-				Absolute:SetDefine:_ABSOLUTE_VERTEX_POS 1
-        */
+/*ase_subshader_options:Name=Additional Options
+	Option:Bicubic Lightmap:true,false:false
+		false:RemoveDefine:_BICUBIC_LIGHTMAP
+		true:SetDefine:_BICUBIC_LIGHTMAP
+    Option:Mono SH:true,false:false
+		false:RemoveDefine:_BAKERY_MONOSH
+		true:SetDefine:_BAKERY_MONOSH
+    Port:ForwardBase:Normal
+		On:SetDefine:_NORMALMAP
+	Option:GSAA:true,false:false
+		false:RemoveDefine:_GEOMETRIC_SPECULAR_AA
+		true:SetDefine:_GEOMETRIC_SPECULAR_AA
+	Option:Vertex Position,InvertActionOnDeselection:Absolute,Relative:Relative
+		Absolute:SetDefine:_ABSOLUTE_VERTEX_POS
+	Option:Reflections:true,false:true
+		false:SetDefine:_GLOSSYREFLECTIONS_OFF
+		true:RemoveDefine:_GLOSSYREFLECTIONS_OFF
+	Option:Specular:true,false:true
+		false:SetDefine:_SPECULARHIGHLIGHTS_OFF
+		true:RemoveDefine:_SPECULARHIGHLIGHTS_OFF
+	Option:Shading:PBR,Flat:PBR
+		PBR:RemoveDefine:_FLATSHADING
+		Flat:SetDefine:_FLATSHADING
+		Flat:SetDefine:pragma skip_variants SHADOWS_SCREEN
+*/
         Tags { "RenderType"="Opaque" "Queue" = "Geometry+0" "DisableBatching" = "False" }
         /*ase_all_modules*/
 		/*ase_pass*/
@@ -184,7 +194,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half roughness2Clamped = max(roughness2, 0.002);
                 float3 reflectVector = reflect(-viewDirectionWS, normalWS);
                 #if !defined(QUALITY_LOW)
-                    reflectVector = lerp(reflectVector, normalWS, roughness2);
+                    // reflectVector = lerp(reflectVector, normalWS, roughness2);
                 #endif
                 half3 f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + albedo * metallic;
                 half3 brdf;
@@ -192,7 +202,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 Filament::EnvironmentBRDF(NoV, roughness, f0, brdf, energyCompensation);
 
                 half3 indirectDiffuse;
-                half3 indirectOcclusion;
+                half3 indirectOcclusion = 1;
                 #if defined(LIGHTMAP_ON)
                     #if defined(_BICUBIC_LIGHTMAP) && !defined(QUALITY_LOW)
                         float4 texelSize = TexelSizeFromTexture2D(unity_Lightmap);
@@ -234,12 +244,28 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     #endif
 
                 #else
-                    #if UNITY_SAMPLE_FULL_SH_PER_PIXEL
-                        indirectDiffuse = ShadeSHPerPixel(normalWS, 0.0, positionWS);
-                    #else
-                        indirectDiffuse = ShadeSHPerPixel(normalWS, varyings.sh, positionWS);
-                    #endif
-                    indirectOcclusion = indirectDiffuse;
+					#if defined(_FLATSHADING)
+					{
+						float3 sh9Dir = (unity_SHAr.xyz + unity_SHAg.xyz + unity_SHAb.xyz);
+						float3 sh9DirAbs = float3(sh9Dir.x, abs(sh9Dir.y), sh9Dir.z);
+						half3 N = normalize(sh9DirAbs);
+						UNITY_FLATTEN
+						if (!any(unity_SHC.xyz))
+						{
+							N = 0;
+						}
+						half3 l0l1 = SHEvalLinearL0L1(float4(N, 1));
+						half3 l2 = SHEvalLinearL2(float4(N, 1));
+						indirectDiffuse = l0l1 + l2;
+					}
+					#else
+						#if UNITY_SAMPLE_FULL_SH_PER_PIXEL
+							indirectDiffuse = ShadeSHPerPixel(normalWS, 0.0, positionWS);
+						#else
+							indirectDiffuse = ShadeSHPerPixel(normalWS, varyings.sh, positionWS);
+						#endif
+                    	indirectOcclusion = indirectDiffuse;
+					#endif
                 #endif
                 indirectDiffuse = max(0.0, indirectDiffuse);
 
@@ -276,7 +302,13 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     indirectSpecular *= horizon * horizon;
                 #endif
 
-                indirectSpecular *= energyCompensation * brdf;
+                half3 fr;
+                // float surfaceReduction = 1.0 / (roughness2 + 1.0);
+                // half grazingTerm = saturate(lerp(1.0, 0.475, roughness) * (1.0 - roughness) + (1.0 - metallic));
+                // fr = FresnelLerp(f0, grazingTerm, NoV) * surfaceReduction;
+                fr = energyCompensation * brdf;
+                indirectSpecular *= fr;
+
                 directSpecular *= UNITY_PI;
 
                 half specularAO;
@@ -288,6 +320,11 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 directSpecular *= specularAO;
                 specularAO *= lerp(1.0, saturate(sqrt(dot(indirectOcclusion + directDiffuse, 1.0))), specularAOIntensity);
                 indirectSpecular *= specularAO;
+
+				#ifdef _FLATSHADING
+					indirectDiffuse = saturate(max(indirectDiffuse, directDiffuse));
+					directDiffuse = 0.0;
+				#endif
 
                 half4 color = half4(albedo * (1.0 - metallic) * (indirectDiffuse * occlusion + directDiffuse), alpha);
                 color.rgb += directSpecular + indirectSpecular;
@@ -446,6 +483,10 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     specularAO = Filament::ComputeSpecularAO(NoV, occlusion, roughness2);
                 #endif
                 directSpecular *= specularAO;
+
+				#ifdef _FLATSHADING
+					directDiffuse = saturate(directDiffuse);
+				#endif
 
                 half4 color = half4(albedo * (1.0 - metallic) * directDiffuse, alpha);
                 color.rgb += directSpecular;

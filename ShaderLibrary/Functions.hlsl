@@ -72,9 +72,11 @@ struct Light
 void ShadeLight(Light light, float3 viewDirectionWS, float3 normalWS, half roughness, half NoV, half3 f0, half3 energyCompensation, inout half3 color, inout half3 specular)
 {
     half lightNoL = saturate(dot(normalWS, light.direction));
+    #if !defined(_FLATSHADING)
     UNITY_BRANCH
     if (light.attenuation * lightNoL > 0)
     {
+    #endif
         float3 lightHalfVector = normalize(light.direction + viewDirectionWS);
         half lightLoH = saturate(dot(light.direction, lightHalfVector));
         half lightNoH = saturate(dot(normalWS, lightHalfVector));
@@ -87,10 +89,14 @@ void ShadeLight(Light light, float3 viewDirectionWS, float3 normalWS, half rough
             #endif
         #endif
 
-        color += lightColor;
-        half clampedRoughness = max(roughness * roughness, 0.002);
+        #if defined(_FLATSHADING)
+            color += light.attenuation * light.color;
+        #else
+            color += lightColor;
+        #endif
 
         #ifndef _SPECULARHIGHLIGHTS_OFF
+            half clampedRoughness = max(roughness * roughness, 0.002);
             #ifdef _ANISOTROPY
                 // half at = max(clampedRoughness * (1.0 + surfaceDescription.Anisotropy), 0.001);
                 // half ab = max(clampedRoughness * (1.0 - surfaceDescription.Anisotropy), 0.001);
@@ -118,7 +124,9 @@ void ShadeLight(Light light, float3 viewDirectionWS, float3 normalWS, half rough
 
             specular += max(0.0, (D * V) * F) * lightColor;
         #endif
+    #if !defined(_FLATSHADING)
     }
+    #endif
 }
 
 // Bicubic from Core RP
