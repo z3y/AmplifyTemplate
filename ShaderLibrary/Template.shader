@@ -33,6 +33,9 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 		PBR:RemoveDefine:_FLATSHADING
 		Flat:SetDefine:_FLATSHADING
 		Flat:SetDefine:pragma skip_variants SHADOWS_SCREEN
+	Option:CBIRP:true,false:false
+		true:SetDefine:_CBIRP
+		false:RemoveDefine:_CBIRP
 */
         Tags { "RenderType"="Opaque" "Queue" = "Geometry+0" "DisableBatching" = "False" }
         /*ase_all_modules*/
@@ -95,6 +98,9 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             };
 
             #include "Packages/com.z3y.shadersamplify/ShaderLibrary/Functions.hlsl"
+            #ifdef _CBIRP
+            #include "Packages/z3y.clusteredbirp/Shaders/CBIRP.hlsl"
+            #endif
 
             /*ase_globals*/
             /*ase_funcs*/
@@ -297,6 +303,23 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     indirectSpecular += reflectionSpecular;
                 #endif
 
+                                
+                #ifdef _CBIRP
+                     #ifdef LIGHTMAP_ON
+                        half4 shadowmask = _Udon_CBIRP_ShadowMask.SampleLevel(custom_bilinear_clamp_sampler, lightmapUV, 0);
+                        // half4 shadowmask = 1;
+                    #else
+                        half4 shadowmask = 1;
+                #endif
+                    directDiffuse = 0;
+                    directSpecular = 0;
+                    uint3 cluster = CBIRP::GetCluster(positionWS);
+                    CBIRP::ComputeLights(cluster, positionWS, normalWS, viewDirectionWS, f0, NoV, roughness, shadowmask, directDiffuse, directSpecular);
+                    directSpecular /= UNITY_PI;
+                    directSpecular *= energyCompensation;
+                    indirectSpecular = CBIRP::SampleProbes(cluster, reflectVector, positionWS, roughness).xyz;
+                #endif
+
                 #if !defined(QUALITY_LOW)
                     float horizon = min(1.0 + dot(reflectVector, normalWS), 1.0);
                     indirectSpecular *= horizon * horizon;
@@ -304,12 +327,13 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 
                 half3 fr;
                 // float surfaceReduction = 1.0 / (roughness2 + 1.0);
-                // half grazingTerm = saturate(lerp(1.0, 0.475, roughness) * (1.0 - roughness) + (1.0 - metallic));
+                // half grazingTerm = saturate((1.0 - roughness) + (1.0 - metallic));
                 // fr = FresnelLerp(f0, grazingTerm, NoV) * surfaceReduction;
                 fr = energyCompensation * brdf;
                 indirectSpecular *= fr;
 
                 directSpecular *= UNITY_PI;
+
 
                 half specularAO;
                 #if defined(QUALITY_LOW)
