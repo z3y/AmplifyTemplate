@@ -13,9 +13,12 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 	Option:Bicubic Lightmap:true,false:false
 		false:RemoveDefine:_BICUBIC_LIGHTMAP
 		true:SetDefine:_BICUBIC_LIGHTMAP
-    Option:Mono SH:true,false:false
+	Option:Mono SH:true,false:false
 		false:RemoveDefine:_BAKERY_MONOSH
 		true:SetDefine:_BAKERY_MONOSH
+	Option:Lightmapped Specular:true,false:false
+		true:SetDefine:_LIGHTMAPPED_SPECULAR
+		false:RemoveDefine:_LIGHTMAPPED_SPECULAR
     Port:ForwardBase:Normal
 		On:SetDefine:_NORMALMAP
 	Option:GSAA:true,false:false
@@ -207,7 +210,11 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half3 energyCompensation;
                 Filament::EnvironmentBRDF(NoV, roughness, f0, brdf, energyCompensation);
 
-                half3 indirectDiffuse;
+
+                half3 directDiffuse = 0;
+                half3 directSpecular = 0;
+                half3 indirectSpecular = 0;
+                half3 indirectDiffuse = 0;
                 half3 indirectOcclusion = 1;
                 #if defined(LIGHTMAP_ON)
                     #if defined(_BICUBIC_LIGHTMAP) && !defined(QUALITY_LOW)
@@ -231,6 +238,26 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                             half3 L1z = nL1.z * L0 * 2.0;
                             half3 sh = L0 + normalWS.x * L1x + normalWS.y * L1y + normalWS.z * L1z;
                             illuminance = sh;
+                            #ifdef _LIGHTMAPPED_SPECULAR
+                            {
+                                half smoothnessLm = 1.0f - roughness2Clamped;
+                                smoothnessLm *= sqrt(saturate(length(nL1)));
+                                half roughnessLm = 1.0f - smoothnessLm;
+                                half3 dominantDir = nL1;
+                                half3 halfDir = Unity_SafeNormalize(normalize(dominantDir) + viewDirectionWS);
+                                half nh = saturate(dot(normalWS, halfDir));
+                                half spec = Filament::D_GGX(nh, roughnessLm);
+                                sh = L0 + dominantDir.x * L1x + dominantDir.y * L1y + dominantDir.z * L1z;
+                                
+                                #ifdef _ANISOTROPY
+                                    // half at = max(roughnessLm * (1.0 + surf.Anisotropy), 0.001);
+                                    // half ab = max(roughnessLm * (1.0 - surf.Anisotropy), 0.001);
+                                    // indirectSpecular += max(Filament::D_GGX_Anisotropic(nh, halfDir, sd.tangentWS, sd.bitangentWS, at, ab) * sh, 0.0);
+                                #else
+                                    indirectSpecular += max(spec * sh, 0.0);
+                                #endif
+                            }
+                            #endif
                         #else
                             half halfLambert = dot(normalWS, directionalLightmap.xyz - 0.5) + 0.5;
                             illuminance = illuminance * halfLambert / max(1e-4, directionalLightmap.w);
@@ -275,9 +302,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 #endif
                 indirectDiffuse = max(0.0, indirectDiffuse);
 
-                half3 directDiffuse = 0;
-                half3 directSpecular = 0;
-                half3 indirectSpecular = 0;
 
                 // main light
                 ShadeLight(light, viewDirectionWS, normalWS, roughness, NoV, f0, energyCompensation, directDiffuse, directSpecular);
