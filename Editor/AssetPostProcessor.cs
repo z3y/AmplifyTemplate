@@ -37,7 +37,12 @@ namespace z3y
         {
             var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
             var dfg = AssetDatabase.LoadAssetAtPath<Texture>(DFG_PATH);
-            EditorMaterialUtility.SetShaderNonModifiableDefaults(shader, new [] { "_DFG" }, new [] { dfg });
+            var importer = ShaderImporter.GetAtPath(path);
+            if (importer is ShaderImporter shaderImporter)
+            {
+                shaderImporter.SetNonModifiableTextures(new [] { "_DFG" }, new [] { dfg });
+            }
+            //EditorMaterialUtility.SetShaderNonModifiableDefaults(shader, new [] { "_DFG" }, new [] { dfg });
         }
     }
 }
