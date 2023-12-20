@@ -198,6 +198,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 /*ase_local_var:wbt*/float3 geometricBitangentWS = normalize(bitangentWS);
                 /*ase_local_var:wp*/float3 positionWS = varyings.positionWS;
                 /*ase_local_var:wvd*/float3 viewDirectionWS = normalize(UnityWorldSpaceViewDir(positionWS));
+                float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
+                /*ase_local_var:tvd*/float3 viewDirectionTS = normalize(mul(tangentToWorld, viewDirectionWS));
 
                 Light light = Light::Initialize(varyings);
                 /*ase_local_var*/half3 lightColor = light.color;
@@ -205,6 +207,9 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 /*ase_local_var*/half lightAttenuation = light.attenuation;
 
                 /*ase_frag_code:varyings=Varyings*/
+
+                #define ase_tanViewDir viewDirectionTS
+
                 half3 albedo = /*ase_frag_out:Albedo;Float3;_Albedo*/1.0/*end*/;
                 float3 normalTS = /*ase_frag_out:Normal TS;Float3;_Normal*/float3(0, 0, 1)/*end*/;
                 half3 emission = /*ase_frag_out:Emission;Float3;_Emission*/0.0/*end*/;
@@ -221,7 +226,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 				ApplyAlphaClip(alpha, alphaClipThreshold);
 
                 #if defined(_NORMALMAP)
-                    float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
                     normalWS = mul(normalTS, tangentToWorld);
                     normalWS = Unity_SafeNormalize(normalWS);
                 #else
@@ -516,6 +520,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 /*ase_local_var:wbt*/float3 geometricBitangentWS = normalize(bitangentWS);
                 /*ase_local_var:wp*/float3 positionWS = varyings.positionWS;
                 /*ase_local_var:wvd*/float3 viewDirectionWS = normalize(UnityWorldSpaceViewDir(positionWS));
+                float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
+                /*ase_local_var:tvd*/float3 viewDirectionTS = normalize(mul(tangentToWorld, viewDirectionWS));
 
                 Light light = Light::Initialize(varyings);
                 /*ase_local_var*/half3 lightColor = light.color;
@@ -523,6 +529,9 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 /*ase_local_var*/half lightAttenuation = light.attenuation;
 
                 /*ase_frag_code:varyings=Varyings*/
+
+                #define ase_tanViewDir viewDirectionTS
+
                 half3 albedo = /*ase_frag_out:Albedo;Float3;_Albedo*/1.0/*end*/;
                 float3 normalTS = /*ase_frag_out:Normal TS;Float3;_Normal*/float3(0, 0, 1)/*end*/;
                 half metallic = /*ase_frag_out:Metallic;Float;_Metallic*/0.0/*end*/;
@@ -537,7 +546,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 				ApplyAlphaClip(alpha, alphaClipThreshold);
 
                 #if defined(_NORMALMAP)
-                    float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
                     normalWS = mul(normalTS, tangentToWorld);
                     normalWS = Unity_SafeNormalize(normalWS);
                 #else
