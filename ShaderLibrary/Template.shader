@@ -4,7 +4,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 {
     Properties
     {
-        [HideInInspector] [NonModifiableTextureData] [NoScaleOffset] _DFG ("DFG", 2D) = "black" {}
         /*ase_props*/
     }
     SubShader
