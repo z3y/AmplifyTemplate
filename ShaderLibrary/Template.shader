@@ -14,12 +14,12 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 		Opaque:SetPropertyOnSubShader:RenderType,Opaque
 		Opaque:SetPropertyOnSubShader:RenderQueue,Geometry
 		Opaque:SetPropertyOnSubShader:ZWrite,On
-		Opaque:HideOption:Blend
+		Opaque:HideOption: Blend
 		Transparent:SetPropertyOnSubShader:RenderType,Transparent
 		Transparent:SetPropertyOnSubShader:RenderQueue,Transparent
 		Transparent:SetPropertyOnSubShader:ZWrite,Off
-		Transparent:ShowOption:Blend
-	Option:Blend:Alpha,Premultiply,Additive,Multiply,Custom:Alpha
+		Transparent:ShowOption: Blend
+	Option: Blend:Alpha,Premultiply,Additive,Multiply,Custom:Alpha
 		Alpha:SetPropertyOnPass:ForwardBase:BlendRGB,SrcAlpha,OneMinusSrcAlpha
 		Alpha:SetPropertyOnPass:ForwardAdd:BlendRGB,SrcAlpha,One
 		Alpha:SetDefine:_ALPHAFADE_ON
@@ -30,7 +30,12 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 		Multiply:SetPropertyOnPass:ForwardBase:BlendRGB,DstColor,Zero
 		disable,Premultiply,Additive,Multiply,Custom:RemoveDefine:_ALPHAFADE_ON
 		disable,Alpha,Additive,Multiply,Custom:RemoveDefine:_ALPHAPREMULTIPLY_ON
-		disable,SetPropertyOnPass:ForwardBase:BlendRGB,One,Zero
+		disable:SetPropertyOnPass:ForwardBase:BlendRGB,One,Zero
+	Option:Cutout:true,false:false
+		true:SetDefine:_ALPHATEST_ON
+		true:SetPropertyOnSubShader:RenderType,TransparentCutout
+		true:SetPropertyOnSubShader:RenderQueue,AlphaTest
+		false:RemoveDefine:_ALPHATEST_ON
 	Option:Bicubic Lightmap:true,false:false
 		false:RemoveDefine:_BICUBIC_LIGHTMAP
 		true:SetDefine:_BICUBIC_LIGHTMAP
@@ -212,6 +217,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
                 half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float;_GSAAT*/0.1/*end*/;
                 half specularAOIntensity = /*ase_frag_out:Specular Occlusion;Float;_SPAO*/1.0/*end*/;
+
+				ApplyAlphaClip(alpha, alphaClipThreshold);
 
                 #if defined(_NORMALMAP)
                     float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
@@ -527,6 +534,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
                 half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float;_GSAAT*/0.1/*end*/;
 
+				ApplyAlphaClip(alpha, alphaClipThreshold);
+
                 #if defined(_NORMALMAP)
                     float3x3 tangentToWorld = float3x3(varyings.tangentWS.xyz, bitangentWS, varyings.normalWS.xyz);
                     normalWS = mul(normalTS, tangentToWorld);
@@ -733,18 +742,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 
             /*ase_globals*/
             /*ase_funcs*/
-
-            float4 WorldToPositionCS(float3 positionWS)
-            {
-                float4 clipPos;
-                #if defined(STEREO_CUBEMAP_RENDER_ON)
-                    float3 offset = ODSOffset(positionWS, unity_HalfStereoSeparation.x);
-                    clipPos = mul(UNITY_MATRIX_VP, float4(positionWS + offset, 1.0));
-                #else
-                    clipPos = mul(UNITY_MATRIX_VP, float4(positionWS, 1.0));
-                #endif
-                return clipPos;
-            }
 
             Varyings vert (Attributes attributes/*ase_vert_input*/)
             {

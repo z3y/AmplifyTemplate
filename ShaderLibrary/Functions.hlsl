@@ -40,6 +40,12 @@ void AlphaTransparentBlend(inout half alpha, inout half3 albedo, half metallic)
         alpha = 1.0f;
     #endif
 }
+void ApplyAlphaClip(inout half alpha, half clipThreshold)
+{
+    #if defined(_ALPHATEST_ON)
+        clip(alpha - clipThreshold);
+    #endif
+}
 
 #ifdef UNITY_PBS_USE_BRDF2
     #define QUALITY_LOW
