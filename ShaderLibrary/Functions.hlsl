@@ -6,6 +6,10 @@ SamplerState custom_bilinear_clamp_sampler;
 // #endif
 // #define UNITY_SAMPLE_FULL_SH_PER_PIXEL 1
 
+#ifdef UNITY_PBS_USE_BRDF2
+    #define QUALITY_LOW
+#endif
+
 #include "Filament.hlsl"
 
 float4 WorldToPositionCS(float3 positionWS)
@@ -47,9 +51,6 @@ void ApplyAlphaClip(inout half alpha, half clipThreshold)
     #endif
 }
 
-#ifdef UNITY_PBS_USE_BRDF2
-    #define QUALITY_LOW
-#endif
 
 struct Light
 {

@@ -415,7 +415,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 color.rgb += directSpecular + indirectSpecular;
                 color.rgb += emission;
 
-                UNITY_APPLY_FOG(i.fogCoord, color);
+                UNITY_APPLY_FOG(varyings.fogCoord, color);
                 return color;
             }
             ENDHLSL
@@ -580,7 +580,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half4 color = half4(albedo * (1.0 - metallic) * directDiffuse, alpha);
                 color.rgb += directSpecular;
 
-                UNITY_APPLY_FOG(i.fogCoord, color);
+                UNITY_APPLY_FOG(varyings.fogCoord, color);
                 return color;
             }
             ENDHLSL
