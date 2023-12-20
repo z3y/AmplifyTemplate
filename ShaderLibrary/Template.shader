@@ -10,6 +10,27 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
     SubShader
     {
 /*ase_subshader_options:Name=Additional Options
+	Option:Surface:Opaque,Transparent:Opaque
+		Opaque:SetPropertyOnSubShader:RenderType,Opaque
+		Opaque:SetPropertyOnSubShader:RenderQueue,Geometry
+		Opaque:SetPropertyOnSubShader:ZWrite,On
+		Opaque:HideOption:Blend
+		Transparent:SetPropertyOnSubShader:RenderType,Transparent
+		Transparent:SetPropertyOnSubShader:RenderQueue,Transparent
+		Transparent:SetPropertyOnSubShader:ZWrite,Off
+		Transparent:ShowOption:Blend
+	Option:Blend:Alpha,Premultiply,Additive,Multiply,Custom:Alpha
+		Alpha:SetPropertyOnPass:ForwardBase:BlendRGB,SrcAlpha,OneMinusSrcAlpha
+		Alpha:SetPropertyOnPass:ForwardAdd:BlendRGB,SrcAlpha,One
+		Alpha:SetDefine:_ALPHAFADE_ON
+		Premultiply:SetPropertyOnPass:ForwardBase:BlendRGB,One,OneMinusSrcAlpha
+		disable,Premultiply,Additive,Multiply,Custom:SetPropertyOnPass:ForwardAdd:BlendRGB,One,One
+		Premultiply:SetDefine:_ALPHAPREMULTIPLY_ON
+		Additive:SetPropertyOnPass:ForwardBase:BlendRGB,One,One
+		Multiply:SetPropertyOnPass:ForwardBase:BlendRGB,DstColor,Zero
+		disable,Premultiply,Additive,Multiply,Custom:RemoveDefine:_ALPHAFADE_ON
+		disable,Alpha,Additive,Multiply,Custom:RemoveDefine:_ALPHAPREMULTIPLY_ON
+		disable,SetPropertyOnPass:ForwardBase:BlendRGB,One,Zero
 	Option:Bicubic Lightmap:true,false:false
 		false:RemoveDefine:_BICUBIC_LIGHTMAP
 		true:SetDefine:_BICUBIC_LIGHTMAP
@@ -41,14 +62,21 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 		false:RemoveDefine:_CBIRP
 */
         Tags { "RenderType"="Opaque" "Queue" = "Geometry+0" "DisableBatching" = "False" }
-        /*ase_all_modules*/
-		/*ase_pass*/
+        Cull Back
+		AlphaToMask Off
+		ZWrite On
+		ZTest LEqual
+		ColorMask RGBA
+		/*ase_stencil*/
+		/*ase_all_modules*/
 
+		/*ase_pass*/
         Pass
         {
             /*ase_main_pass*/
             Name "ForwardBase"
             Tags { "LightMode" = "ForwardBase" }
+			Blend One Zero
 
             HLSLPROGRAM
             #pragma target 4.5 
@@ -374,6 +402,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 					directDiffuse = 0.0;
 				#endif
 
+				AlphaTransparentBlend(alpha, albedo, metallic);
+
                 half4 color = half4(albedo * (1.0 - metallic) * (indirectDiffuse * occlusion + directDiffuse), alpha);
                 color.rgb += directSpecular + indirectSpecular;
                 color.rgb += emission;
@@ -387,7 +417,7 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
         Pass
         {
             /*ase_hide_pass*/
-            Name "FORWARD_DELTA"
+            Name "ForwardAdd"
             Tags { "LightMode" = "ForwardAdd" }
             Fog { Color (0,0,0,0) }
             Blend One One
@@ -535,6 +565,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 				#ifdef _FLATSHADING
 					directDiffuse = saturate(directDiffuse);
 				#endif
+
+				AlphaTransparentBlend(alpha, albedo, metallic);
 
                 half4 color = half4(albedo * (1.0 - metallic) * directDiffuse, alpha);
                 color.rgb += directSpecular;

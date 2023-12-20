@@ -25,6 +25,22 @@ float3 Orthonormalize(float3 tangent, float3 normal)
     return normalize(tangent - dot(tangent, normal) * normal);
 }
 
+void AlphaTransparentBlend(inout half alpha, inout half3 albedo, half metallic)
+{
+    #if defined(_ALPHAPREMULTIPLY_ON)
+        albedo.rgb *= alpha;
+        alpha = lerp(alpha, 1.0, metallic);
+    #endif
+
+    #if defined(_ALPHAMODULATE_ON)
+        albedo = lerp(1.0, albedo, alpha);
+    #endif
+
+    #if !defined(_ALPHAFADE_ON) && !defined(_ALPHATEST_ON) && !defined(_ALPHAPREMULTIPLY_ON) && !defined(_ALPHAMODULATE_ON)
+        alpha = 1.0f;
+    #endif
+}
+
 #ifdef UNITY_PBS_USE_BRDF2
     #define QUALITY_LOW
 #endif
