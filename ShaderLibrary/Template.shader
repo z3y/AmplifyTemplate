@@ -45,8 +45,11 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 	Option:Lightmapped Specular:true,false:false
 		true:SetDefine:_LIGHTMAPPED_SPECULAR
 		false:RemoveDefine:_LIGHTMAPPED_SPECULAR
-    Port:ForwardBase:Normal
+	Port:ForwardBase:Normal TS
 		On:SetDefine:_NORMALMAP
+	Port:ForwardBase:Debug
+		On:SetDefine:_DEBUGOUTPUT
+		Off:RemoveDefine:_DEBUGOUTPUT
 	Option:GSAA:true,false:false
 		false:RemoveDefine:_GEOMETRIC_SPECULAR_AA
 		true:SetDefine:_GEOMETRIC_SPECULAR_AA
@@ -222,6 +225,11 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
                 half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float;_GSAAT*/0.1/*end*/;
                 half specularAOIntensity = /*ase_frag_out:Specular Occlusion;Float;_SPAO*/1.0/*end*/;
+
+                #ifdef _DEBUGOUTPUT
+                    half4 debugOutput = /*ase_frag_out:Debug;Float4;_Debug*/0/*end*/;
+                    return debugOutput;
+                #endif
 
 				ApplyAlphaClip(alpha, alphaClipThreshold);
 
@@ -542,6 +550,11 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                 half alphaClipThreshold = /*ase_frag_out:Alpha Clip Threshold;Float;_AlphaClip*/0.5/*end*/;
                 half gsaaVariance = /*ase_frag_out:GSAA Variance;Float;_GSAAV*/0.15/*end*/;
                 half gsaaThreshold = /*ase_frag_out:GSAA Threshold;Float;_GSAAT*/0.1/*end*/;
+
+                #ifdef _DEBUGOUTPUT
+                    half4 debugOutput = /*ase_frag_out:Debug;Float4;_Debug*/0/*end*/;
+                    return debugOutput;
+                #endif
 
 				ApplyAlphaClip(alpha, alphaClipThreshold);
 
