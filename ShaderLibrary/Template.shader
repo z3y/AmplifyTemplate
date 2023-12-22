@@ -5,7 +5,10 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
     Properties
     {
         [HideInInspector] [NonModifiableTextureData] [NoScaleOffset] _DFG ("DFG", 2D) = "black" {}
-        /*ase_props*/
+
+		/*ase_props*/
+
+		[Toggle(_LTCGI)] _LTCGI ("LTCGI", Float) = 1.0
     }
     SubShader
     {
@@ -68,8 +71,11 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
 	Option:CBIRP:true,false:false
 		true:SetDefine:_CBIRP
 		false:RemoveDefine:_CBIRP
+	Option:LTCGI:true,false:false
+		true:SetDefine:pragma shader_feature_local _LTCGI
+		false:RemoveDefine:pragma shader_feature_local _LTCGI
 */
-        Tags { "RenderType"="Opaque" "Queue" = "Geometry+0" "DisableBatching" = "False" }
+        Tags { "RenderType"="Opaque" "Queue" = "Geometry+0" "DisableBatching" = "False" "LTCGI" = "_LTCGI" }
         Cull Back
 		AlphaToMask Off
 		ZWrite On
@@ -94,7 +100,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             #pragma multi_compile_fog
             #pragma multi_compile_instancing
             #pragma skip_variants LIGHTPROBE_SH
-            /*ase_pragma*/
 
             #define pos positionCS
             #define vertex positionOS
@@ -102,6 +107,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             #include "UnityCG.cginc"
             #include "Lighting.cginc"
             #include "AutoLight.cginc"
+
+            /*ase_pragma*/
 
             struct Attributes
             {
@@ -140,6 +147,9 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             #ifdef _CBIRP
             #include "Packages/z3y.clusteredbirp/Shaders/CBIRP.hlsl"
             #endif
+			#ifdef _LTCGI
+				#include "Assets/_pi_/_LTCGI/Shaders/LTCGI.cginc"
+			#endif
 
             /*ase_globals*/
             /*ase_funcs*/
@@ -396,15 +406,28 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
                     indirectSpecular *= horizon * horizon;
                 #endif
 
+
+				#ifdef _LTCGI
+					float2 untransformedLightmapUV = 0;
+					#ifdef LIGHTMAP_ON
+					untransformedLightmapUV = (lightmapUV - unity_LightmapST.zw) / unity_LightmapST.xy;
+					#endif
+					float3 ltcgiSpecular = 0;
+					float3 ltcgiDiffuse = 0;
+					LTCGI_Contribution(positionWS.xyz, normalWS, viewDirectionWS, roughness, untransformedLightmapUV, ltcgiDiffuse, ltcgiSpecular);
+					#ifndef LTCGI_DIFFUSE_DISABLED
+						directDiffuse += ltcgiDiffuse;
+					#endif
+					indirectSpecular += ltcgiSpecular;
+				#endif
+
                 half3 fr;
                 // float surfaceReduction = 1.0 / (roughness2 + 1.0);
                 // half grazingTerm = saturate((1.0 - roughness) + (1.0 - metallic));
                 // fr = FresnelLerp(f0, grazingTerm, NoV) * surfaceReduction;
                 fr = energyCompensation * brdf;
                 indirectSpecular *= fr;
-
                 directSpecular *= UNITY_PI;
-
 
                 half specularAO;
                 #if defined(QUALITY_LOW)
@@ -449,7 +472,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             #pragma fragment frag
             #pragma multi_compile_fwdadd_fullshadows
             #pragma multi_compile_fog
-            /*ase_pragma*/
 
             #define pos positionCS
             #define vertex positionOS
@@ -457,6 +479,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             #include "UnityCG.cginc"
             #include "Lighting.cginc"
             #include "AutoLight.cginc"
+
+            /*ase_pragma*/
 
             struct Attributes
             {
@@ -624,8 +648,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             #pragma fragment frag
             #pragma multi_compile_shadowcaster
             #pragma multi_compile_instancing
-            /*ase_pragma*/
-
 
             #define pos positionCS
             #define vertex positionOS
@@ -633,6 +655,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             #include "UnityCG.cginc"
             // #include "Lighting.cginc"
             // #include "AutoLight.cginc"
+
+            /*ase_pragma*/
 
             struct Attributes
             {
@@ -727,7 +751,6 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             #pragma vertex vert
             #pragma fragment frag
             #pragma shader_feature EDITOR_VISUALIZATION
-            /*ase_pragma*/
 
             #define pos positionCS
             #define vertex positionOS
@@ -736,6 +759,8 @@ Shader /*ase_name*/ "Hidden/Built-In/Lit" /*end*/
             #include "Lighting.cginc"
             #include "AutoLight.cginc"
             #include "UnityMetaPass.cginc"
+			
+            /*ase_pragma*/
 
             struct Attributes
             {
